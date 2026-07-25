@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  smoke:
+    # Installs the packed tarball the way a consumer would, then drives a real
+    # capture of a throwaway page end to end. Catches anything `typecheck`
+    # cannot: a missing entry in `files`, a broken bin shim, a config that no
+    # longer loads.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npm pack --pack-destination /tmp
+
+      - name: Set up a consumer project
+        run: |
+          mkdir -p /tmp/smoke/site
+          cd /tmp/smoke
+          npm init -y > /dev/null
+          npm install /tmp/storeshot-*.tgz
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <title>smoke</title>
+          <body style="margin:0;background:#111;color:#fff;font:600 32px sans-serif">
+            <div data-ready style="padding:64px">Hello</div>
+          </body>
+          HTML
+          cat > storeshot.config.ts <<'TS'
+          import { defineConfig } from 'storeshot';
+
+          export default defineConfig({
+            baseUrl: 'http://127.0.0.1:8123',
+            screens: [
+              { id: 'home', path: '/', theme: 'dark', waitFor: ['[data-ready]'] },
+            ],
+            captions: { en: { home: { kicker: 'Smoke', title: 'It renders' } } },
+          });
+          TS
+
+      - name: Install browsers
+        working-directory: /tmp/smoke
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Capture and compose
+        working-directory: /tmp/smoke
+        run: |
+          python3 -m http.server 8123 --directory site &
+          npx wait-on http://127.0.0.1:8123
+          npx storeshot
+
+      - name: Check every target produced an asset
+        working-directory: /tmp/smoke
+        run: |
+          for target in ios-iphone-6.9 ios-ipad-13 android-phone android-tablet; do
+            test -f "screenshots/framed/en/$target/01-home.png"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smoke-assets
+          path: /tmp/smoke/screenshots/framed
