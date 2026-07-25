@@ -115,6 +115,7 @@ export interface RunOptions {
 export const USAGE = `Usage: storeshot [options]
 
   --config <path>    Config file. Default: nearest storeshot.config.ts.
+  --base-url <url>   Override the app URL from the config.
   --target <id>      Only this target (repeatable). Default: all.
   --screen <id>      Only this screen (repeatable). Default: all.
   --locale <code>    Caption locale (repeatable). Default: all configured.
@@ -154,8 +155,9 @@ export async function parseOptions(
     process.exit(0);
   }
 
-  const configPath = single(argv, '--config');
-  const config = await loadConfig(configPath);
+  const loaded = await loadConfig(single(argv, '--config'));
+  const baseUrl = single(argv, '--base-url');
+  const config = baseUrl ? { ...loaded, baseUrl } : loaded;
 
   const targetIds = collect(argv, '--target');
   const screenIds = collect(argv, '--screen');
