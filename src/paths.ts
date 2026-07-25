@@ -22,7 +22,11 @@ export function resolvePaths(
 ): ResolvedPaths {
   const root = from(configDir, config.rootDir, '.');
   const out = from(root, config.outDir, 'screenshots');
-  const cache = from(out, config.cacheDir, '.cache');
+  // Defaults inside the output directory, but an explicit value is read
+  // relative to the root like every other setting.
+  const cache = config.cacheDir
+    ? from(root, config.cacheDir, '.cache')
+    : resolve(out, '.cache');
 
   return {
     root,
