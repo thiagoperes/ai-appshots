@@ -1,0 +1,53 @@
+{
+  "name": "storeshot",
+  "version": "0.1.0",
+  "description": "Replicable, agent-programmable App Store and Google Play screenshots.",
+  "keywords": [
+    "app-store",
+    "google-play",
+    "screenshots",
+    "fastlane",
+    "playwright",
+    "frameit",
+    "mobile",
+    "release"
+  ],
+  "license": "MIT",
+  "author": "Thiago Peres",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thiagoperes/storeshot.git"
+  },
+  "bugs": "https://github.com/thiagoperes/storeshot/issues",
+  "homepage": "https://github.com/thiagoperes/storeshot#readme",
+  "type": "module",
+  "bin": {
+    "storeshot": "./bin/storeshot.mjs"
+  },
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jiti": "^2.6.1",
+    "playwright": "^1.61.1",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}
