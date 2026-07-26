@@ -213,7 +213,8 @@ export function linearGradientToSvg(
   id: string,
   size: { readonly width: number; readonly height: number },
 ) {
-  const match = /^linear-gradient\((.*)\)$/is.exec(value.trim());
+  // `[\s\S]` rather than the `s` flag, which needs a consumer targeting ES2018.
+  const match = /^linear-gradient\(([\s\S]*)\)$/i.exec(value.trim());
 
   if (!match?.[1]) {
     throw new Error(
