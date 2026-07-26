@@ -16,6 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
 
   smoke:
     # Installs the packed tarball the way a consumer would, then drives a real
@@ -169,11 +170,6 @@ jobs:
           });
           TS
 
-      # Composition always renders in Chromium, whatever the capture source.
-      - name: Install Chromium
-        working-directory: /tmp/native
-        run: npx playwright install chromium
-
       - name: Capture and compose
         working-directory: /tmp/native
         run: |
@@ -200,3 +196,86 @@ jobs:
         with:
           name: smoke-ios-assets
           path: /tmp/native/screenshots/framed
+
+  smoke-no-browser:
+    # Proves a native or imported run needs no browser at all: Playwright is
+    # skipped at install time, so neither the package nor any browser binary is
+    # present, and composition still has to produce a store-ready asset.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npm pack --pack-destination /tmp
+
+      - name: Install without Playwright
+        run: |
+          mkdir -p /tmp/headless/incoming/ios-iphone-6.9
+          cd /tmp/headless
+          npm init -y > /dev/null
+          # Playwright is an optional peer dependency, so a plain install brings
+          # neither the package nor any browser binary.
+          npm install /tmp/storeshot-*.tgz
+          test ! -d node_modules/playwright
+          cat > storeshot.config.ts <<'TS'
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+
+          export default defineConfig({
+            targets: [findTarget('ios-iphone-6.9', DEFAULT_TARGETS)],
+            capture: { kind: 'import', dir: 'incoming' },
+            screens: [{ id: 'home', theme: 'dark' }],
+            captions: {
+              en: { home: { kicker: 'No browser', title: 'Composed by sharp alone' } },
+            },
+          });
+          TS
+
+      - name: Compose from an imported screen
+        working-directory: /tmp/headless
+        run: |
+          node -e "
+            require('sharp')({
+              create: { width: 1320, height: 2868, channels: 3, background: '#101828' },
+            })
+              .png()
+              .toFile('incoming/ios-iphone-6.9/home.png');
+          "
+          npx storeshot
+          node -e "
+            const { readFileSync } = require('node:fs');
+            const png = readFileSync(
+              'screenshots/framed/en/ios-iphone-6.9/01-home.png',
+            );
+            const width = png.readUInt32BE(16);
+            const height = png.readUInt32BE(20);
+            if (width !== 1320 || height !== 2868) {
+              throw new Error('unexpected size ' + width + 'x' + height);
+            }
+          "
+
+      - name: Explain the missing browser when a web capture is asked for
+        working-directory: /tmp/headless
+        run: |
+          cat > web.config.ts <<'TS'
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+
+          export default defineConfig({
+            baseUrl: 'http://127.0.0.1:8123',
+            targets: [findTarget('ios-iphone-6.9', DEFAULT_TARGETS)],
+            screens: [{ id: 'home', path: '/', theme: 'dark' }],
+            captions: { en: { home: { title: 'Needs a browser' } } },
+          });
+          TS
+          if npx storeshot --config web.config.ts 2>err.log; then
+            echo 'expected the web capture to fail without Playwright'
+            exit 1
+          fi
+          grep -q 'needs Playwright' err.log
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: smoke-no-browser-assets
+          path: /tmp/headless/screenshots/framed

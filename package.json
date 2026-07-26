@@ -1,6 +1,6 @@
 {
   "name": "storeshot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Replicable, agent-programmable App Store and Google Play screenshots for native and web apps.",
   "keywords": [
     "app-store",
@@ -43,15 +43,24 @@
     "node": ">=20"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test \"src/**/__tests__/*.test.ts\""
   },
   "dependencies": {
     "jiti": "^2.6.1",
-    "playwright": "^1.61.1",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "playwright": "^1.61.1"
+  },
+  "peerDependencies": {
+    "playwright": "^1.61.1"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
   }
 }

@@ -25,12 +25,25 @@ output: same input, same pixels, reviewable in a pull request.
 
 ```bash
 npm install --save-dev github:thiagoperes/storeshot
-npx playwright install chromium
 ```
 
-Chromium is always needed: the marketing canvas is rendered as a web page
-whatever your app is written in. Add `webkit` too if you capture from a browser.
-Node 20 or newer. Device bezels are downloaded on first use.
+Node 20 or newer. Nothing else, and no browser: the marketing canvas is composed
+with [sharp](https://sharp.pixelplumbing.com), so a native app never downloads a
+browser binary. Device bezels are fetched on first use and cached.
+
+Capturing from a browser is the one thing that needs more. Playwright is an
+optional peer dependency, so add it only for that:
+
+```bash
+npm install --save-dev playwright
+npx playwright install webkit chromium
+```
+
+Composition shapes text with Pango, so at least one font has to be installed. A
+desktop or a normal CI runner already has plenty; a slim Linux image may need a
+package such as `fonts-dejavu-core`. Name real families in your theme —
+`-apple-system` and other CSS keywords mean nothing outside a browser and are
+skipped over in the stack.
 
 ## Quick start
 
@@ -68,6 +81,10 @@ export default defineConfig({
 
 `baseUrl` is only needed for browser captures. If your app has no deep links,
 see [Navigating a native app](#navigating-a-native-app).
+
+Captions wrap to fit and, at two lines, rebalance so the lines come out close to
+equal instead of leaving a stub on the second. Put a `\n` in a title to break it
+somewhere specific and that is used verbatim.
 
 ### A web app
 
@@ -239,9 +256,11 @@ a deep link. Raise `settleDelay` if a capture lands mid-transition.
    clipped through a mask traced from the frame's own alpha channel so the
    rounded corners and the Dynamic Island cut the screenshot exactly the way the
    hardware does.
-4. **Compose.** The framed device and its caption are laid out as an HTML page
-   and screenshotted at the store's output size. Layout is CSS, so captions
-   reflow per locale instead of being baked into a fixed-width bitmap.
+4. **Compose.** The framed device and its caption are laid out at the store's
+   output size. The backdrop is an SVG rasterised by librsvg, the type is shaped
+   by Pango and measured before it is placed, and the device is resampled by
+   sharp. Captions reflow and rebalance per locale rather than being baked into a
+   fixed-width bitmap, and none of it needs a browser.
 5. **Deliver.** Assets are flattened, validated, and staged under `fastlane/`.
 
 ## Configuration
@@ -287,7 +306,9 @@ export default defineConfig({
       title: '#FFFFFF',
       kicker: '#A6D8FD',
     },
-    sansFont: '"Inter", -apple-system, sans-serif',
+    // Real installed families. A `linear-gradient` above takes an angle or a
+    // `to <side>`, with hex, rgb() or rgba() stops.
+    sansFont: '"Inter", "Helvetica Neue", sans-serif',
     showIndex: true,
   },
 

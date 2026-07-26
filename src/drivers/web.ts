@@ -1,6 +1,5 @@
 import { access } from 'node:fs/promises';
 
-import { chromium, webkit } from 'playwright';
 import type { Browser, BrowserContext, Page } from 'playwright';
 
 import { pageViewport } from '../frames';
@@ -33,8 +32,6 @@ const FREEZE_STYLES = `
   }
 `;
 
-const ENGINES = { webkit, chromium } as const;
-
 /**
  * WebKit for iOS targets and Chromium for Android ones, so the render engine
  * matches the web view the app will actually run in.
@@ -43,8 +40,27 @@ function engineFor(spec: WebCapture, target?: TargetSpec): BrowserEngine {
   return spec.engine ?? (target?.platform === 'android' ? 'chromium' : 'webkit');
 }
 
+/**
+ * Loads Playwright on demand.
+ *
+ * Nothing else in the pipeline needs a browser, so a project that captures from
+ * a simulator, an emulator or a directory of screenshots can install without one
+ * and never download a browser binary.
+ */
 export async function launchBrowser(engine: BrowserEngine): Promise<Browser> {
-  return ENGINES[engine].launch();
+  let playwright;
+
+  try {
+    playwright = await import('playwright');
+  } catch {
+    throw new Error(
+      'Capturing from a browser needs Playwright, which is not installed.\n' +
+        'Run: npm install --save-dev playwright && npx playwright install ' +
+        `${engine}`,
+    );
+  }
+
+  return playwright[engine].launch();
 }
 
 async function hasStoredAuth(config: ResolvedConfig) {

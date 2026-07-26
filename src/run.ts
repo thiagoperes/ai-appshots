@@ -1,7 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { chromium } from 'playwright';
 
 import { composeScreenshot } from './compose';
 import type { RunOptions } from './config';
@@ -109,88 +108,82 @@ export async function runCompose(options: RunOptions) {
 
   step('Composing framed store assets');
 
-  const browser = await chromium.launch();
   const issues: ValidationIssue[] = [];
 
-  try {
-    for (const locale of options.locales) {
-      const captions = config.captions[locale] ?? {};
+  for (const locale of options.locales) {
+    const captions = config.captions[locale] ?? {};
 
-      for (const target of options.targets) {
-        // Declared by the capture spec rather than measured, so `--skip-capture`
-        // composes the same way a full run would.
-        const { includesStatusBar } = driverFor(target, config);
+    for (const target of options.targets) {
+      // Declared by the capture spec rather than measured, so `--skip-capture`
+      // composes the same way a full run would.
+      const { includesStatusBar } = driverFor(target, config);
 
-        for (const screen of options.screens) {
-          if (!includesTarget(screen, target)) {
-            continue;
-          }
-
-          // Position in the full set, not in this run's filtered subset, so a
-          // partial rerun keeps the same numbering instead of writing a second
-          // file under a different index.
-          const order = config.screens.indexOf(screen);
-          const caption = captions[screen.id];
-
-          if (!caption) {
-            fail(
-              `No caption for screen "${screen.id}" in locale "${locale}".`,
-              'Add it to the captions map in your storeshot config.',
-            );
-          }
-
-          const source = rawPath(config, locale, target, screen);
-          let capture: Buffer;
-
-          try {
-            capture = await readFile(source);
-          } catch {
-            warn(`missing capture ${source}, skipping`);
-            continue;
-          }
-
-          const composed = await composeScreenshot({
-            browser,
-            target,
-            capture,
-            caption,
-            theme: screen.theme,
-            canvas: config.theme,
-            frameCacheDir: config.paths.frameCache,
-            includesStatusBar,
-            index: order + 1,
-          });
-          const flattened = await flattenForStore(composed);
-          const destination = framedPath(config, locale, target, screen, order);
-
-          await ensureParentDir(destination);
-          await writeFile(destination, flattened);
-
-          const name = `${target.id}/${locale}/${screen.id}`;
-
-          issues.push(
-            ...(await validateAsset(
-              name,
-              flattened,
-              target.output,
-              target.store,
-            )),
-          );
-
-          await stageForDelivery(
-            destination,
-            target,
-            locale,
-            `${String(order + 1).padStart(2, '0')}-${target.id}-${screen.id}.png`,
-            config,
-          );
-
-          info(`${name} → ${target.output.width}x${target.output.height}`);
+      for (const screen of options.screens) {
+        if (!includesTarget(screen, target)) {
+          continue;
         }
+
+        // Position in the full set, not in this run's filtered subset, so a
+        // partial rerun keeps the same numbering instead of writing a second
+        // file under a different index.
+        const order = config.screens.indexOf(screen);
+        const caption = captions[screen.id];
+
+        if (!caption) {
+          fail(
+            `No caption for screen "${screen.id}" in locale "${locale}".`,
+            'Add it to the captions map in your storeshot config.',
+          );
+        }
+
+        const source = rawPath(config, locale, target, screen);
+        let capture: Buffer;
+
+        try {
+          capture = await readFile(source);
+        } catch {
+          warn(`missing capture ${source}, skipping`);
+          continue;
+        }
+
+        const composed = await composeScreenshot({
+          target,
+          capture,
+          caption,
+          theme: screen.theme,
+          canvas: config.theme,
+          frameCacheDir: config.paths.frameCache,
+          includesStatusBar,
+          index: order + 1,
+        });
+        const flattened = await flattenForStore(composed);
+        const destination = framedPath(config, locale, target, screen, order);
+
+        await ensureParentDir(destination);
+        await writeFile(destination, flattened);
+
+        const name = `${target.id}/${locale}/${screen.id}`;
+
+        issues.push(
+          ...(await validateAsset(
+            name,
+            flattened,
+            target.output,
+            target.store,
+          )),
+        );
+
+        await stageForDelivery(
+          destination,
+          target,
+          locale,
+          `${String(order + 1).padStart(2, '0')}-${target.id}-${screen.id}.png`,
+          config,
+        );
+
+        info(`${name} → ${target.output.width}x${target.output.height}`);
       }
     }
-  } finally {
-    await browser.close();
   }
 
   return issues;

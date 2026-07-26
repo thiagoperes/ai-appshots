@@ -4,8 +4,10 @@ export { run, runCapture, runCompose } from './run';
 export { DEFAULT_TARGETS, findTarget, STORE_POLICIES } from './targets';
 export type { StorePolicy } from './targets';
 export { DEFAULT_THEME, MONO_STACK, SANS_STACK, resolveTheme } from './theme';
-export { buildCompositionHtml } from './template';
-export type { CompositionOptions } from './template';
+export { renderCanvas } from './render/canvas';
+export type { CanvasOptions } from './render/canvas';
+export { measureLine, typesetLine } from './render/typeset';
+export type { TextStyle } from './render/typeset';
 export { composeScreenshot } from './compose';
 export {
   captureSpecFor,
