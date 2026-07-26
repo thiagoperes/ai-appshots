@@ -75,27 +75,48 @@ jobs:
             test -f "screenshots/framed/en/$target/01-home.png"
           done
 
-      - name: Reframe those captures through the import driver
+      # The import driver takes full device screens, as a simulator or XCUITest
+      # produces, so it gets a stand-in of exactly that size rather than the
+      # status-bar-less page crops the web driver leaves in screenshots/raw.
+      - name: Frame a full-screen image through the import driver
         working-directory: /tmp/smoke
         run: |
+          mkdir -p incoming/ios-iphone-6.9
+          node -e "
+            require('sharp')({
+              create: {
+                width: 1320,
+                height: 2868,
+                channels: 3,
+                background: '#101828',
+              },
+            })
+              .png()
+              .toFile('incoming/ios-iphone-6.9/home.png');
+          "
           cat > import.config.ts <<'TS'
           import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
 
           export default defineConfig({
-            baseUrl: 'http://unused.local',
             outDir: 'imported',
             targets: [findTarget('ios-iphone-6.9', DEFAULT_TARGETS)],
-            capture: {
-              kind: 'import',
-              dir: 'screenshots/raw/en/ios-iphone-6.9',
-              file: ({ screen }) => `${screen.id}.png`,
-            },
+            capture: { kind: 'import', dir: 'incoming' },
             screens: [{ id: 'home', theme: 'dark' }],
             captions: { en: { home: { title: 'Imported' } } },
           });
           TS
           npx storeshot --config import.config.ts
           test -f imported/framed/en/ios-iphone-6.9/01-home.png
+
+      - name: Refuse a capture that is the wrong shape
+        working-directory: /tmp/smoke
+        run: |
+          cp screenshots/raw/en/ios-iphone-6.9/home.png incoming/ios-iphone-6.9/
+          if npx storeshot --config import.config.ts 2>err.log; then
+            echo 'expected the page crop to be rejected'
+            exit 1
+          fi
+          grep -q 'short by exactly' err.log
 
       - uses: actions/upload-artifact@v5
         with:

@@ -48,11 +48,19 @@ async function normalize(capture: Buffer, target: TargetSpec) {
   const drift = Math.abs(width / height - expected.width / expected.height);
 
   if (drift > ASPECT_TOLERANCE) {
+    const statusBar = Math.round(
+      target.statusBarHeight * target.deviceScaleFactor,
+    );
+
     throw new Error(
-      `A ${target.id} capture is ${width}x${height}, which is not the shape ` +
-        `of its ${expected.width}x${expected.height} device frame.\n` +
-        `Capture from a device matching the target, or point the target at a ` +
-        `frame for the device you have.`,
+      `Capture for "${target.id}" is ${width}x${height}, which is not the ` +
+        `shape of its ${expected.width}x${expected.height} device frame.\n` +
+        (height === expected.height - statusBar
+          ? `It is short by exactly the ${statusBar}px status bar, so it looks ` +
+            `like a browser capture. Those need the "web" capture kind, which ` +
+            `synthesises the status bar it is missing.`
+          : `Capture from a device matching the target, or point the target at ` +
+            `a frame for the device you have.`),
     );
   }
 

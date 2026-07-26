@@ -309,8 +309,11 @@ export interface PrepareContext {
 }
 
 export interface StoreshotConfig {
-  /** Origin of the running app, e.g. `http://localhost:3000`. */
-  readonly baseUrl: string;
+  /**
+   * Origin of the running app, e.g. `http://localhost:3000`. Required for
+   * browser captures and unused by every other capture source.
+   */
+  readonly baseUrl?: string;
   /** Base for relative paths below. Defaults to the config file's directory. */
   readonly rootDir?: string;
   /** Where raw and framed output is written. Default `<rootDir>/screenshots`. */
@@ -366,6 +369,7 @@ export interface ResolvedPaths {
 }
 
 export interface ResolvedConfig extends StoreshotConfig {
+  readonly baseUrl: string;
   readonly targets: readonly TargetSpec[];
   readonly theme: CanvasTheme;
   readonly hide: readonly string[];

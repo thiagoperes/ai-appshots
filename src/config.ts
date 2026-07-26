@@ -85,14 +85,15 @@ export async function loadConfig(
   const jiti = createJiti(pathToFileURL(path).href, { interopDefault: true });
   const loaded = (await jiti.import(path, { default: true })) as StoreshotConfig;
 
-  if (!loaded?.baseUrl || !loaded.screens?.length) {
-    fail(
-      `${path} must export a config with "baseUrl" and at least one screen.`,
-    );
+  if (!loaded?.screens?.length) {
+    fail(`${path} must export a config with at least one screen.`);
   }
 
   return {
     ...loaded,
+    // Only browser captures need this, and they fail clearly on a bad URL, so a
+    // native config is not obliged to invent one.
+    baseUrl: loaded.baseUrl ?? 'http://localhost:3000',
     targets: loaded.targets?.length ? loaded.targets : DEFAULT_TARGETS,
     theme: resolveTheme(loaded.theme),
     hide: loaded.hide ?? ['nextjs-portal'],
