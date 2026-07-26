@@ -8,11 +8,11 @@ export { buildCompositionHtml } from './template';
 export type { CompositionOptions } from './template';
 export { composeScreenshot } from './compose';
 export {
-  captureScreen,
-  createAuthState,
-  createContext,
+  captureSpecFor,
+  createDriver,
+  driverFor,
   launchBrowser,
-} from './capture';
+} from './drivers';
 export { flattenForStore, validateAsset } from './encode';
 export type { ValidationIssue } from './encode';
 export { captureSize, pageViewport, statusBarSize } from './frames';

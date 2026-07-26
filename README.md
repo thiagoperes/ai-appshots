@@ -2,10 +2,14 @@
 
 Replicable, agent-programmable App Store and Google Play screenshots.
 
-Point it at a running app, describe the screens you want in a config file, and
-get back store-ready assets: real captures of your app, clipped into real device
-bezels, laid out under marketing copy, at the exact pixel sizes Apple and Google
-accept, staged for `fastlane deliver` and `supply`.
+Describe the screens you want in a config file and get back store-ready assets:
+real captures of your app, clipped into real device bezels, laid out under
+marketing copy, at the exact pixel sizes Apple and Google accept, staged for
+`fastlane deliver` and `supply`.
+
+Works with native and web apps alike. Captures come from the iOS Simulator, an
+Android emulator, a headless browser, or a directory of screenshots something
+else produced — everything after that point is identical.
 
 No design tool in the loop. The whole set is one command, so it can run in CI,
 and an agent can change the copy or add a screen by editing one file.
@@ -19,19 +23,53 @@ output: same input, same pixels, reviewable in a pull request.
 
 ## Install
 
-It runs a real browser and reads real device frames, so both are fetched on
-first use.
-
 ```bash
 npm install --save-dev github:thiagoperes/storeshot
-npx playwright install chromium webkit
+npx playwright install chromium
 ```
 
-Node 20 or newer.
+Chromium is always needed: the marketing canvas is rendered as a web page
+whatever your app is written in. Add `webkit` too if you capture from a browser.
+Node 20 or newer. Device bezels are downloaded on first use.
 
 ## Quick start
 
-Create `storeshot.config.ts` next to your app:
+### A native app
+
+```ts
+import { defineConfig } from 'storeshot';
+
+export default defineConfig({
+  capture: {
+    ios: {
+      kind: 'ios-simulator',
+      device: 'iPhone 17 Pro Max',
+      bundleId: 'com.acme.App',
+      appPath: 'build/App.app',
+    },
+    android: {
+      kind: 'android-emulator',
+      appId: 'com.acme.app',
+      apkPath: 'build/app-release.apk',
+    },
+  },
+  screens: [
+    { id: 'home', deepLink: 'acme://home', theme: 'dark' },
+    { id: 'search', deepLink: 'acme://search', theme: 'dark' },
+  ],
+  captions: {
+    en: {
+      home: { kicker: 'Overview', title: 'Everything in one place' },
+      search: { kicker: 'Search', title: 'Find it in a keystroke' },
+    },
+  },
+});
+```
+
+`baseUrl` is only needed for browser captures. If your app has no deep links,
+see [Navigating a native app](#navigating-a-native-app).
+
+### A web app
 
 ```ts
 import { defineConfig } from 'storeshot';
@@ -43,15 +81,12 @@ export default defineConfig({
     { id: 'search', path: '/search', theme: 'dark' },
   ],
   captions: {
-    en: {
-      home: { kicker: 'Overview', title: 'Everything in one place' },
-      search: { kicker: 'Search', title: 'Find it in a keystroke' },
-    },
+    /* as above */
   },
 });
 ```
 
-Then, with your app running:
+Either way:
 
 ```bash
 npx storeshot
@@ -66,12 +101,19 @@ Four targets are built in, chosen to satisfy both stores with the smallest
 possible set. Apple scales the 6.9" iPhone and 13" iPad sets down for every
 smaller device, so those two cover the App Store.
 
-| Target            | Store  | Output      | Frame                  |
-| ----------------- | ------ | ----------- | ---------------------- |
-| `ios-iphone-6.9`  | Apple  | 1320 × 2868 | iPhone 17 Pro Max      |
-| `ios-ipad-13`     | Apple  | 2064 × 2752 | iPad Pro 12.9"         |
-| `android-phone`   | Google | 1080 × 1920 | Pixel 5                |
-| `android-tablet`  | Google | 1440 × 2560 | Neutral CSS bezel      |
+| Target           | Store  | Screen      | Output      | Frame             |
+| ---------------- | ------ | ----------- | ----------- | ----------------- |
+| `ios-iphone-6.9` | Apple  | 1320 × 2868 | 1320 × 2868 | iPhone 17 Pro Max |
+| `ios-ipad-13`    | Apple  | 2048 × 2732 | 2064 × 2752 | iPad Pro 12.9"    |
+| `android-phone`  | Google | 1080 × 2340 | 1080 × 1920 | Pixel 5           |
+| `android-tablet` | Google | 1680 × 2440 | 1440 × 2560 | Neutral CSS bezel |
+
+A target describes its screen in points and a scale factor, which is the same
+arithmetic for both worlds: an iPhone 17 Pro Max is 440 × 956pt at 3x, or
+1320 × 2868px, whether that comes from a simulator or a browser viewport. If your
+device's screenshot is a slightly different size but the same shape — the frame
+set's 12.9" iPad cutout is 2048 × 2732 while the simulator shoots 2064 × 2752 — it
+is resampled. A genuinely different aspect ratio is refused rather than squashed.
 
 Every asset is flattened to 24-bit PNG and checked before it is written: wrong
 dimensions, a leftover alpha channel, or a file over Google's 8 MB cap fails the
@@ -83,15 +125,115 @@ Store targets keep the device whole and use a background bloom instead of a drop
 shadow. Play has no such rule, so those targets may bleed the device off the
 bottom edge.
 
+## Capture sources
+
+Capture is a driver behind one interface, so where the pixels come from is a
+config choice and nothing downstream changes. Set `capture` once for everything,
+or per platform when a native iOS build and a native Android build need different
+tooling. Individual targets can override it.
+
+### `ios-simulator`
+
+Drives a real build in the Simulator through `xcrun simctl`. Requires macOS with
+Xcode.
+
+```ts
+capture: {
+  kind: 'ios-simulator',
+  device: ['iPhone 17 Pro Max', 'iPhone 16 Pro Max'],
+  bundleId: 'com.acme.App',
+  appPath: 'build/Debug-iphonesimulator/App.app',
+}
+```
+
+It prefers a device that is already booted, boots one if not, and creates the
+simulator outright when no instance matches — which is the normal state of a
+fresh machine or CI runner. Before capturing it pins the status bar to Apple's
+canonical marketing state: 9:41, full battery, full signal. Screenshots are the
+whole screen, real status bar included.
+
+### `android-emulator`
+
+The same idea over `adb`, against an emulator or an attached device.
+
+```ts
+capture: {
+  kind: 'android-emulator',
+  appId: 'com.acme.app',
+  apkPath: 'build/outputs/apk/release/app-release.apk',
+  avd: 'Pixel_5_API_34', // booted only if nothing is attached
+}
+```
+
+SystemUI demo mode stands in for the iOS status bar override, giving a fixed
+clock, a full battery and no notification icons.
+
+### `import`
+
+Frames screenshots something else produced — XCUITest, `fastlane snapshot`,
+Espresso, or a designer's export.
+
+```ts
+capture: {
+  kind: 'import',
+  dir: 'fastlane/screenshots',
+  // Defaults to `<target>/<screen>.png`.
+  file: ({ locale, screen }) => `${locale}/iPhone 17 Pro Max-${screen.id}.png`,
+}
+```
+
+This is the shortest path if you already have UI tests that take screenshots:
+keep taking them however you like and adopt only the framing and delivery half of
+the pipeline.
+
+### `web`
+
+The default. Playwright loads each screen at the device's exact viewport, using
+WebKit for iOS targets and Chromium for Android ones, so the render engine
+matches the web view the app will ship in. Suits anything served over HTTP,
+including Capacitor, Cordova and Electron wrappers.
+
+### `custom`
+
+Anything else — a device farm, `idb`, an Appium session.
+
+```ts
+capture: {
+  kind: 'custom',
+  includesStatusBar: true,
+  open: async ({ target, config }) => ({
+    capture: async (screen, locale) => myDeviceFarm.shoot(target.id, screen.id),
+    close: async () => myDeviceFarm.release(),
+  }),
+}
+```
+
+## Navigating a native app
+
+A native driver gets your app to each screen in one of three ways, in order of
+preference:
+
+1. **A deep link** on the screen — `deepLink: 'acme://cards'` — opened with
+   `simctl openurl` or an `android.intent.action.VIEW` intent. Best option: fully
+   unattended, and most apps that support universal links already have this.
+2. **A `navigate` hook** in the config, which receives the screen and the device
+   handle so it can shell out to `idb`, `adb shell input`, or your own UI
+   automation.
+3. **Nothing**, in which case it prompts you to drive the app by hand and press
+   Enter before each capture. Slow, but it gets a listing shipped today and the
+   captures are reusable — `--skip-capture` reframes them as often as you like.
+
+Native apps often need longer than the 900 ms default to settle after a launch or
+a deep link. Raise `settleDelay` if a capture lands mid-transition.
+
 ## How it works
 
-1. **Capture.** Playwright loads each screen at the device's exact viewport,
-   using WebKit for iOS targets and Chromium for Android, freezes animations and
-   carets, waits for your `waitFor` selectors, and shoots the page.
-2. **Status bar.** The page is captured shorter by the height of the status bar,
-   which is then rendered separately and stacked on top. The strip samples the
-   colour of your app's top row so it disappears into the design, and no app
-   content ends up hidden behind it.
+1. **Capture.** One of the sources above produces a PNG per screen.
+2. **Status bar.** Native captures already have a real one. A browser capture has
+   none, so the page is captured shorter by exactly the status bar's height and a
+   synthetic strip is stacked on top. The strip samples the colour of your app's
+   top row so it disappears into the design, and no app content ends up hidden
+   behind it.
 3. **Frame.** The capture is composited into a device bezel from
    [`fastlane/frameit-frames`](https://github.com/fastlane/frameit-frames),
    clipped through a mask traced from the frame's own alpha channel so the
@@ -104,7 +246,7 @@ bottom edge.
 
 ## Configuration
 
-Everything below `baseUrl`, `screens`, and `captions` is optional.
+Everything below `screens` and `captions` is optional.
 
 ```ts
 import { defineConfig } from 'storeshot';
@@ -112,6 +254,7 @@ import { defineConfig } from 'storeshot';
 import en from './captions/en.json' with { type: 'json' };
 
 export default defineConfig({
+  // Browser captures only.
   baseUrl: process.env.APP_URL ?? 'http://localhost:3000',
 
   // Where output and caches go. Relative to the config file.
@@ -121,6 +264,7 @@ export default defineConfig({
   screens: [
     {
       id: 'dashboard',
+      // A path for browser captures, a deepLink for native ones.
       path: '/app/dashboard',
       theme: 'dark',
       // Nothing is captured until these are visible, so no skeletons.
@@ -147,7 +291,7 @@ export default defineConfig({
     showIndex: true,
   },
 
-  // Signs in once; the session is reused for every target.
+  // Browser captures: signs in once, and the session is reused per target.
   async auth({ page }) {
     await page.goto('/login');
     await page.getByLabel('Email').fill(process.env.DEMO_EMAIL!);
@@ -156,12 +300,19 @@ export default defineConfig({
     await page.waitForURL((url) => !url.pathname.startsWith('/login'));
   },
 
-  // Runs before each screen navigates. Cookies, storage, network stubs.
+  // Browser captures: runs before each screen navigates.
   async prepare({ context, page, screen }) {
     await context.addCookies([
       { name: 'theme', value: screen.theme, domain: 'localhost', path: '/' },
     ]);
     await page.route('**/api/telemetry', (route) => route.abort());
+  },
+
+  // Native captures: drives the app when a screen has no deepLink.
+  async navigate({ screen, device, platform }) {
+    if (platform === 'ios') {
+      await myUiAutomation.tapTab(device, screen.id);
+    }
   },
 });
 ```
@@ -175,6 +326,7 @@ Import `DEFAULT_TARGETS` and spread it, or write your own `TargetSpec[]`.
 storeshot [options]
 
   --config <path>    Config file. Default: nearest storeshot.config.ts.
+  --base-url <url>   Override the app URL from the config.
   --target <id>      Only this target (repeatable). Default: all.
   --screen <id>      Only this screen (repeatable). Default: all.
   --locale <code>    Caption locale (repeatable). Default: all configured.
@@ -184,7 +336,12 @@ storeshot [options]
 ```
 
 `--skip-capture` is the one to know: iterating on copy or colours reuses the
-captures already on disk, so the loop is seconds rather than minutes.
+captures already on disk, so the loop is seconds rather than minutes. That matters
+more for native, where a capture pass means booting a simulator.
+
+To capture the same app two ways — headless for speed, a real simulator to check
+fidelity before a listing refresh — keep a second config that overrides only
+`capture` and select it with `--config`.
 
 ## Working with an agent
 
@@ -209,11 +366,15 @@ TypeScript loader will not work. The CLI handles this for you.
 
 ## Prior art
 
-[fastlane](https://fastlane.tools) `snapshot` and `frameit` solve the same
-problem for native apps driven by UI tests. storeshot targets web-rendered
-apps — anything served over HTTP, including Capacitor, Cordova, and Electron
-wrappers — and does the marketing composition in CSS rather than ImageMagick.
-The device bezels come from fastlane's own frame set.
+[fastlane](https://fastlane.tools) `snapshot` and `frameit` cover the same ground
+for native apps, and if you already run them happily there is little reason to
+switch. The differences that motivated this: capture is a driver rather than a
+requirement, so native, web and pre-made screenshots go through one pipeline;
+composition is CSS instead of ImageMagick, so captions reflow and the layout uses
+your own design tokens; and it needs no UI-test suite to get started. Deliberately
+not reimplemented is running your tests — `xcodebuild test` is fastlane's job, and
+the `import` driver consumes whatever it produces. The device bezels come from
+fastlane's own frame set.
 
 ## License
 

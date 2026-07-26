@@ -3,20 +3,21 @@ import { resolve } from 'node:path';
 
 import { chromium } from 'playwright';
 
-import {
-  captureScreen,
-  createAuthState,
-  createContext,
-  launchBrowser,
-} from './capture';
 import { composeScreenshot } from './compose';
 import type { RunOptions } from './config';
+import { captureSpecFor, createDriver, driverFor } from './drivers';
 import { resetDeliveryDirs, stageForDelivery } from './deliver';
 import { flattenForStore, validateAsset } from './encode';
 import type { ValidationIssue } from './encode';
 import { fail, info, step, warn } from './log';
 import { ensureParentDir } from './paths';
-import type { ResolvedConfig, ScreenSpec, TargetSpec } from './types';
+import type {
+  CaptureDriver,
+  CaptureSpec,
+  ResolvedConfig,
+  ScreenSpec,
+  TargetSpec,
+} from './types';
 
 function includesTarget(screen: ScreenSpec, target: TargetSpec) {
   return !screen.excludeTargets?.includes(target.id);
@@ -53,30 +54,52 @@ export async function runCapture(options: RunOptions) {
 
   step('Capturing device screenshots');
 
+  // One driver per distinct capture spec, so a run that mixes an iOS simulator
+  // with an Android emulator only signs in, boots or installs once per platform
+  // rather than once per target.
+  const bySpec = new Map<CaptureSpec, CaptureDriver>();
+  const byTarget = new Map<string, CaptureDriver>();
+
   for (const target of options.targets) {
-    const browser = await launchBrowser(target.engine);
+    const spec = captureSpecFor(target, config);
+    let driver = bySpec.get(spec);
+
+    if (!driver) {
+      driver = createDriver(spec);
+      bySpec.set(spec, driver);
+    }
+
+    byTarget.set(target.id, driver);
+  }
+
+  for (const driver of bySpec.values()) {
+    await driver.setup?.(config, { freshAuth: options.freshAuth });
+  }
+
+  for (const target of options.targets) {
+    const driver = byTarget.get(target.id)!;
+
+    info(`${target.id} via ${driver.kind}`);
+
+    const session = await driver.open({ target, config });
 
     try {
-      const context = await createContext(browser, target, config);
-
       for (const locale of options.locales) {
         for (const screen of options.screens) {
           if (!includesTarget(screen, target)) {
             continue;
           }
 
-          const buffer = await captureScreen(context, screen, target, config);
+          const buffer = await session.capture(screen, locale);
           const path = rawPath(config, locale, target, screen);
 
           await ensureParentDir(path);
           await writeFile(path, buffer);
-          info(`${target.id}/${locale}/${screen.id}`);
+          info(`  ${target.id}/${locale}/${screen.id}`);
         }
       }
-
-      await context.close();
     } finally {
-      await browser.close();
+      await session.close();
     }
   }
 }
@@ -94,6 +117,10 @@ export async function runCompose(options: RunOptions) {
       const captions = config.captions[locale] ?? {};
 
       for (const target of options.targets) {
+        // Declared by the capture spec rather than measured, so `--skip-capture`
+        // composes the same way a full run would.
+        const { includesStatusBar } = driverFor(target, config);
+
         for (const screen of options.screens) {
           if (!includesTarget(screen, target)) {
             continue;
@@ -130,6 +157,7 @@ export async function runCompose(options: RunOptions) {
             theme: screen.theme,
             canvas: config.theme,
             frameCacheDir: config.paths.frameCache,
+            includesStatusBar,
             index: order + 1,
           });
           const flattened = await flattenForStore(composed);
@@ -177,12 +205,6 @@ export async function run(options: RunOptions) {
   info(`locales:  ${options.locales.join(', ')}`);
 
   if (options.capture) {
-    await createAuthState(
-      options.targets[0]?.engine ?? 'chromium',
-      config,
-      !options.freshAuth,
-    );
-
     await runCapture(options);
   }
 

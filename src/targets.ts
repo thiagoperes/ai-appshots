@@ -38,7 +38,7 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
   {
     id: 'ios-iphone-6.9',
     store: 'app-store',
-    engine: 'webkit',
+    platform: 'ios',
     viewport: { width: 440, height: 956 },
     deviceScaleFactor: 3,
     output: { width: 1320, height: 2868 },
@@ -53,13 +53,12 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
     // and indicators land either side of the island cut into the bezel.
     statusBarHeight: 59,
     statusBarTextSize: 17,
-    statusBarPlatform: 'ios',
     deliveryKind: 'ios',
   },
   {
     id: 'ios-ipad-13',
     store: 'app-store',
-    engine: 'webkit',
+    platform: 'ios',
     viewport: { width: 1024, height: 1366 },
     deviceScaleFactor: 2,
     output: { width: 2064, height: 2752 },
@@ -72,13 +71,12 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
     captionGapRatio: 0.05,
     statusBarHeight: 24,
     statusBarTextSize: 13,
-    statusBarPlatform: 'ios',
     deliveryKind: 'ios',
   },
   {
     id: 'android-phone',
     store: 'play-store',
-    engine: 'chromium',
+    platform: 'android',
     viewport: { width: 360, height: 780 },
     deviceScaleFactor: 3,
     output: { width: 1080, height: 1920 },
@@ -91,7 +89,6 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
     captionGapRatio: 0.042,
     statusBarHeight: 24,
     statusBarTextSize: 14,
-    statusBarPlatform: 'android',
     deliveryKind: 'phone',
   },
   {
@@ -100,7 +97,7 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
     // CSS bezel ages better; swap in a frameit frame here if that changes.
     id: 'android-tablet',
     store: 'play-store',
-    engine: 'chromium',
+    platform: 'android',
     viewport: { width: 840, height: 1220 },
     deviceScaleFactor: 2,
     output: { width: 1440, height: 2560 },
@@ -114,7 +111,6 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
     captionGapRatio: 0.05,
     statusBarHeight: 24,
     statusBarTextSize: 14,
-    statusBarPlatform: 'android',
     deliveryKind: 'tablet',
   },
 ];

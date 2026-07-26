@@ -75,7 +75,107 @@ jobs:
             test -f "screenshots/framed/en/$target/01-home.png"
           done
 
+      - name: Reframe those captures through the import driver
+        working-directory: /tmp/smoke
+        run: |
+          cat > import.config.ts <<'TS'
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+
+          export default defineConfig({
+            baseUrl: 'http://unused.local',
+            outDir: 'imported',
+            targets: [findTarget('ios-iphone-6.9', DEFAULT_TARGETS)],
+            capture: {
+              kind: 'import',
+              dir: 'screenshots/raw/en/ios-iphone-6.9',
+              file: ({ screen }) => `${screen.id}.png`,
+            },
+            screens: [{ id: 'home', theme: 'dark' }],
+            captions: { en: { home: { title: 'Imported' } } },
+          });
+          TS
+          npx storeshot --config import.config.ts
+          test -f imported/framed/en/ios-iphone-6.9/01-home.png
+
       - uses: actions/upload-artifact@v5
         with:
           name: smoke-assets
           path: /tmp/smoke/screenshots/framed
+
+  smoke-ios:
+    # Real capture from the iOS Simulator. Safari stands in for an app under
+    # test, which is enough to exercise device creation, booting, the marketing
+    # status bar override, deep-link navigation and `simctl io screenshot`.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npm pack --pack-destination /tmp
+
+      - name: Set up a consumer project
+        run: |
+          mkdir -p /tmp/native/site
+          cd /tmp/native
+          npm init -y > /dev/null
+          npm install /tmp/storeshot-*.tgz
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <title>native smoke</title>
+          <body style="margin:0;background:#0b1020;color:#fff;font:600 34px -apple-system,sans-serif">
+            <div style="padding:120px 48px">Captured from a real iOS Simulator</div>
+          </body>
+          HTML
+          cat > storeshot.config.ts <<'TS'
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+
+          export default defineConfig({
+            baseUrl: 'http://127.0.0.1:8123',
+            targets: [findTarget('ios-iphone-6.9', DEFAULT_TARGETS)],
+            settleDelay: 4000,
+            capture: {
+              kind: 'ios-simulator',
+              device: ['iPhone 17 Pro Max', 'iPhone 16 Pro Max', 'iPhone 15 Pro Max'],
+              bundleId: 'com.apple.mobilesafari',
+            },
+            screens: [
+              { id: 'home', deepLink: 'http://127.0.0.1:8123/', theme: 'dark' },
+            ],
+            captions: { en: { home: { title: 'Straight off the simulator' } } },
+          });
+          TS
+
+      # Composition always renders in Chromium, whatever the capture source.
+      - name: Install Chromium
+        working-directory: /tmp/native
+        run: npx playwright install chromium
+
+      - name: Capture and compose
+        working-directory: /tmp/native
+        run: |
+          python3 -m http.server 8123 --directory site &
+          npx wait-on http://127.0.0.1:8123
+          npx storeshot
+
+      - name: Check the asset exists and is full-screen
+        working-directory: /tmp/native
+        run: |
+          test -f screenshots/framed/en/ios-iphone-6.9/01-home.png
+          node -e "
+            const { readFileSync } = require('node:fs');
+            const png = readFileSync('screenshots/raw/en/ios-iphone-6.9/home.png');
+            const width = png.readUInt32BE(16);
+            const height = png.readUInt32BE(20);
+            console.log('raw capture ' + width + 'x' + height);
+            if (height < width * 1.9) {
+              throw new Error('expected a full device screen, not a page crop');
+            }
+          "
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: smoke-ios-assets
+          path: /tmp/native/screenshots/framed

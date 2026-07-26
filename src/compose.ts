@@ -21,6 +21,47 @@ function toDataUrl(buffer: Buffer) {
   return `data:image/png;base64,${buffer.toString('base64')}`;
 }
 
+/** Aspect ratios within this of each other are treated as the same screen. */
+const ASPECT_TOLERANCE = 0.02;
+
+/**
+ * Scales a native capture onto the exact pixel grid the bezel expects.
+ *
+ * Simulator and emulator screenshots are usually already the right size, but not
+ * always: the frame set's 12.9" iPad cutout is 2048x2732 while the simulator
+ * shoots 2064x2752. Those describe the same screen, so resampling is correct,
+ * whereas a genuinely different aspect ratio means the wrong device and is worth
+ * refusing rather than silently squashing.
+ */
+async function normalize(capture: Buffer, target: TargetSpec) {
+  const expected = captureSize(target);
+  const { width, height } = await sharp(capture).metadata();
+
+  if (!width || !height) {
+    throw new Error(`Could not read the dimensions of a ${target.id} capture.`);
+  }
+
+  if (width === expected.width && height === expected.height) {
+    return capture;
+  }
+
+  const drift = Math.abs(width / height - expected.width / expected.height);
+
+  if (drift > ASPECT_TOLERANCE) {
+    throw new Error(
+      `A ${target.id} capture is ${width}x${height}, which is not the shape ` +
+        `of its ${expected.width}x${expected.height} device frame.\n` +
+        `Capture from a device matching the target, or point the target at a ` +
+        `frame for the device you have.`,
+    );
+  }
+
+  return sharp(capture)
+    .resize(expected.width, expected.height, { fit: 'fill' })
+    .png()
+    .toBuffer();
+}
+
 /**
  * Stacks the status bar strip above the captured page to rebuild the full
  * device screen. The page was captured short by exactly the strip's height, so
@@ -41,7 +82,7 @@ async function buildScreen(
   const statusBar = await renderStatusBar(browser, {
     size: strip,
     style: { background, foreground: foregroundFor(background) },
-    platform: target.statusBarPlatform,
+    platform: target.platform,
     glyph: Math.round(target.statusBarTextSize * target.deviceScaleFactor),
     font,
   });
@@ -81,6 +122,12 @@ export async function composeScreenshot(options: {
   readonly canvas: CanvasTheme;
   /** Directory the downloaded device bezels are cached in. */
   readonly frameCacheDir: string;
+  /**
+   * True when the capture is a full device screen, as a simulator, emulator or
+   * imported screenshot produces. False for a browser capture, which has no
+   * status bar of its own and needs a synthetic one.
+   */
+  readonly includesStatusBar: boolean;
   /** 1-based position in the set, shown as the `[ 01 ]` eyebrow index. */
   readonly index: number;
 }): Promise<Buffer> {
@@ -88,7 +135,9 @@ export async function composeScreenshot(options: {
   const policy = STORE_POLICIES[target.store];
   const frame = target.frame;
 
-  const screen = await buildScreen(browser, target, capture, canvas.sansFont);
+  const screen = options.includesStatusBar
+    ? await normalize(capture, target)
+    : await buildScreen(browser, target, capture, canvas.sansFont);
 
   const deviceBuffer =
     frame.kind === 'css'

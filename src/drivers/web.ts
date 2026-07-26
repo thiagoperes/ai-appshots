@@ -3,15 +3,18 @@ import { access } from 'node:fs/promises';
 import { chromium, webkit } from 'playwright';
 import type { Browser, BrowserContext, Page } from 'playwright';
 
-import { pageViewport } from './frames';
-import { info, warn } from './log';
-import { ensureParentDir } from './paths';
+import { pageViewport } from '../frames';
+import { info, warn } from '../log';
+import { ensureParentDir } from '../paths';
 import type {
   BrowserEngine,
+  CaptureDriver,
+  CaptureSession,
   ResolvedConfig,
   ScreenSpec,
   TargetSpec,
-} from './types';
+  WebCapture,
+} from '../types';
 
 /**
  * Animations and blinking carets are the main source of diff noise between
@@ -32,6 +35,14 @@ const FREEZE_STYLES = `
 
 const ENGINES = { webkit, chromium } as const;
 
+/**
+ * WebKit for iOS targets and Chromium for Android ones, so the render engine
+ * matches the web view the app will actually run in.
+ */
+function engineFor(spec: WebCapture, target?: TargetSpec): BrowserEngine {
+  return spec.engine ?? (target?.platform === 'android' ? 'chromium' : 'webkit');
+}
+
 export async function launchBrowser(engine: BrowserEngine): Promise<Browser> {
   return ENGINES[engine].launch();
 }
@@ -51,9 +62,9 @@ async function hasStoredAuth(config: ResolvedConfig) {
  * does not repeat the flow. The saved state holds a live session for whichever
  * account you captured with, so it belongs in an ignored directory.
  */
-export async function createAuthState(
-  engine: BrowserEngine,
+async function createAuthState(
   config: ResolvedConfig,
+  engine: BrowserEngine,
   reuseAuth: boolean,
 ) {
   if (!config.auth) {
@@ -84,7 +95,7 @@ export async function createAuthState(
   }
 }
 
-export async function createContext(
+async function createContext(
   browser: Browser,
   target: TargetSpec,
   config: ResolvedConfig,
@@ -140,26 +151,32 @@ async function settle(page: Page, screen: ScreenSpec, config: ResolvedConfig) {
  * session bouncing the run to a login page, which otherwise produces a set of
  * perfectly framed sign-in forms.
  */
-function checkLanding(page: Page, screen: ScreenSpec, config: ResolvedConfig) {
+function checkLanding(page: Page, path: string, config: ResolvedConfig) {
   const landed = new URL(page.url()).pathname;
-  const requested = new URL(screen.path, config.baseUrl).pathname;
+  const requested = new URL(path, config.baseUrl).pathname;
 
   if (landed === requested) {
     return;
   }
 
   warn(
-    `"${screen.id}" redirected to ${landed}, expected ${requested}. ` +
+    `expected ${requested} but landed on ${landed}. ` +
       `A cached session may have expired — rerun with --fresh-auth.`,
   );
 }
 
-export async function captureScreen(
+async function captureScreen(
   context: BrowserContext,
   screen: ScreenSpec,
   target: TargetSpec,
   config: ResolvedConfig,
 ): Promise<Buffer> {
+  if (!screen.path) {
+    throw new Error(
+      `Screen "${screen.id}" needs a "path" to be captured in a browser.`,
+    );
+  }
+
   const page = await context.newPage();
 
   try {
@@ -182,10 +199,35 @@ export async function captureScreen(
     });
     await settle(page, screen, config);
 
-    checkLanding(page, screen, config);
+    checkLanding(page, screen.path, config);
 
     return await page.screenshot({ type: 'png', animations: 'disabled' });
   } finally {
     await page.close();
   }
+}
+
+export function createWebDriver(spec: WebCapture): CaptureDriver {
+  return {
+    kind: 'web',
+    // A headless browser has no status bar, so one is synthesised at compose
+    // time and the page is captured short by exactly its height.
+    includesStatusBar: false,
+
+    setup: (config, options) =>
+      createAuthState(config, engineFor(spec), !options.freshAuth),
+
+    open: async ({ target, config }): Promise<CaptureSession> => {
+      const browser = await launchBrowser(engineFor(spec, target));
+      const context = await createContext(browser, target, config);
+
+      return {
+        capture: (screen) => captureScreen(context, screen, target, config),
+        close: async () => {
+          await context.close();
+          await browser.close();
+        },
+      };
+    },
+  };
 }

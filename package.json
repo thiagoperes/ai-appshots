@@ -1,14 +1,18 @@
 {
   "name": "storeshot",
-  "version": "0.1.0",
-  "description": "Replicable, agent-programmable App Store and Google Play screenshots.",
+  "version": "0.2.0",
+  "description": "Replicable, agent-programmable App Store and Google Play screenshots for native and web apps.",
   "keywords": [
     "app-store",
     "google-play",
     "screenshots",
     "fastlane",
-    "playwright",
     "frameit",
+    "ios",
+    "android",
+    "simulator",
+    "xcuitest",
+    "playwright",
     "mobile",
     "release"
   ],
