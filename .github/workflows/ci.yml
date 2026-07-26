@@ -58,9 +58,13 @@ jobs:
           });
           TS
 
-      - name: Install browsers
+      # Playwright is an optional peer dependency, so capturing from a browser
+      # means bringing both the package and the binaries, as the README says.
+      - name: Install Playwright
         working-directory: /tmp/smoke
-        run: npx playwright install --with-deps chromium webkit
+        run: |
+          npm install --save-dev playwright
+          npx playwright install --with-deps chromium webkit
 
       - name: Capture and compose
         working-directory: /tmp/smoke
