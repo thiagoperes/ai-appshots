@@ -2,6 +2,25 @@
 
 Apple and Google Play store screenshots, built by agents, for agents.
 
+Both of these came out of the same config — one run, no design tool.
+
+<table>
+  <tr>
+    <td width="50%">
+      <img
+        src="docs/screenshots/ios.png"
+        alt="Rally's App Store screenshot, an iPhone 17 Pro Max frame over a dark canvas"
+      />
+    </td>
+    <td width="50%">
+      <img
+        src="docs/screenshots/android.png"
+        alt="Rally's Google Play screenshot, a Pixel 5 frame bleeding off the canvas"
+      />
+    </td>
+  </tr>
+</table>
+
 Describe the screens you want in a config file and get back store-ready assets:
 real captures of your app, clipped into real device bezels, laid out under
 marketing copy, at the exact pixel sizes Apple and Google accept, staged for
