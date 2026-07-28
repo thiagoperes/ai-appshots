@@ -35,21 +35,23 @@ and an agent can change the copy or add a screen by editing one file.
 
 ## Why
 
-Store screenshots are usually made by hand, in a design tool, from stale
-mockups. They drift the moment the product changes, nobody can reproduce them,
-and the copy is whatever fit the artboard. storeshot treats them as build
-output: same input, same pixels, reviewable in a pull request.
+The other ways of doing this all make you give something up:
 
-|                             | Without storeshot                                               | With storeshot                                                                              |
-| --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Producing a set             | Screenshots pasted into artboards by hand, once per device size | `npx storeshot`                                                                             |
-| Changing a caption          | Re-export every artboard, for every device, in every language   | One line in a config, then a recompose that takes seconds                                   |
-| Keeping up with the product | Assets quietly go on describing last quarter's UI               | Regenerated from the real app, so a stale listing is a failing job                          |
-| Localisation                | A duplicated artboard set per language                          | A JSON file per locale; captions wrap and rebalance to fit                                  |
-| Device coverage             | Re-crop and re-lay-out for each store's required sizes          | Four targets cover both stores, in points and scale factors rather than magic numbers       |
-| Store rules                 | Read the guidelines and hope                                    | Encoded and enforced: a wrong size, a stray alpha channel or a file over 8 MB fails the run |
-| Review                      | A PNG in a Slack thread                                         | Images in a pull request diff                                                               |
-| Who can do it               | Whoever owns the design file                                    | Anyone editing one file, including an agent                                                 |
+| Tool                      | The catch                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| 🐌 **fastlane** `frameit` | Fragile ImageMagick and JSON layout, device frames that trail Apple's hardware, native-only |
+| 🖱️ **Mockup makers**      | Free, browser-based, one frame at a time by hand — nothing to run in CI                     |
+| 🎨 **Design templates**   | Drift the moment the UI ships; every device and locale is re-exported by hand               |
+| 💸 **Hosted generators**  | A subscription, an account, and your app's screens on someone else's servers                |
+
+storeshot gives up none of them:
+
+- ⚡ **One command** — `npx storeshot` captures, frames and stages a whole set, in CI or locally.
+- 📱 **Native, web, or hybrid** — one pipeline for the iOS Simulator, an Android emulator, a headless browser, or PNGs something else produced. The rest of the field picks a side.
+- 🌍 **Locales are JSON** — captions wrap and rebalance to fit; nothing overflows.
+- 🎯 **Store rules, enforced** — exact sizes, no alpha, under 8 MB, Apple bezels whole, Android free to bleed. A bad asset fails the run, not the upload.
+- 🤖 **Agent-first** — the whole job is one config file, so a coding agent can add a screen or rewrite the copy and the diff lands as images in a pull request.
+- 🆓 **Open source, no account** — MIT, runs on your machine, frames cached locally.
 
 ## Install
 
