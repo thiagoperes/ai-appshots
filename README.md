@@ -2,7 +2,12 @@
 
 Apple and Google Play store screenshots, built by agents, for agents.
 
-Both of these came out of the same config — one run, no design tool.
+- ⚡ **One command** — `npx storeshot` captures, frames and stages a whole set, in CI or locally.
+- 📱 **Native, web, or hybrid** — one pipeline for the iOS Simulator, an Android emulator, a headless browser, or PNGs something else produced. The rest of the field picks a side.
+- 🌍 **Locales are JSON** — captions wrap and rebalance to fit; nothing overflows.
+- 🎯 **Store rules, enforced** — exact sizes, no alpha, under 8 MB, Apple bezels whole, Android free to bleed. A bad asset fails the run, not the upload.
+- 🤖 **Agent-first** — the whole job is one config file, so a coding agent can add a screen or rewrite the copy and the diff lands as images in a pull request.
+- 🆓 **Open source, no account** — MIT, runs on your machine, frames cached locally.
 
 <table>
   <tr>
@@ -44,14 +49,7 @@ The other ways of doing this all make you give something up:
 | 🎨 **Design templates**   | Drift the moment the UI ships; every device and locale is re-exported by hand               |
 | 💸 **Hosted generators**  | A subscription, an account, and your app's screens on someone else's servers                |
 
-storeshot gives up none of them:
-
-- ⚡ **One command** — `npx storeshot` captures, frames and stages a whole set, in CI or locally.
-- 📱 **Native, web, or hybrid** — one pipeline for the iOS Simulator, an Android emulator, a headless browser, or PNGs something else produced. The rest of the field picks a side.
-- 🌍 **Locales are JSON** — captions wrap and rebalance to fit; nothing overflows.
-- 🎯 **Store rules, enforced** — exact sizes, no alpha, under 8 MB, Apple bezels whole, Android free to bleed. A bad asset fails the run, not the upload.
-- 🤖 **Agent-first** — the whole job is one config file, so a coding agent can add a screen or rewrite the copy and the diff lands as images in a pull request.
-- 🆓 **Open source, no account** — MIT, runs on your machine, frames cached locally.
+storeshot gives up none of them.
 
 ## Install
 
