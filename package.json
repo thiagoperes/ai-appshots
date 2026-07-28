@@ -1,7 +1,7 @@
 {
   "name": "storeshot",
   "version": "0.3.0",
-  "description": "Replicable, agent-programmable App Store and Google Play screenshots for native and web apps.",
+  "description": "Apple and Google Play store screenshots, built by agents, for agents.",
   "keywords": [
     "app-store",
     "google-play",

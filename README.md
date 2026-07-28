@@ -1,6 +1,6 @@
 # storeshot
 
-Replicable, agent-programmable App Store and Google Play screenshots.
+Apple and Google Play store screenshots, built by agents, for agents.
 
 Describe the screens you want in a config file and get back store-ready assets:
 real captures of your app, clipped into real device bezels, laid out under
@@ -20,6 +20,17 @@ Store screenshots are usually made by hand, in a design tool, from stale
 mockups. They drift the moment the product changes, nobody can reproduce them,
 and the copy is whatever fit the artboard. storeshot treats them as build
 output: same input, same pixels, reviewable in a pull request.
+
+|                             | Without storeshot                                               | With storeshot                                                                              |
+| --------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Producing a set             | Screenshots pasted into artboards by hand, once per device size | `npx storeshot`                                                                             |
+| Changing a caption          | Re-export every artboard, for every device, in every language   | One line in a config, then a recompose that takes seconds                                   |
+| Keeping up with the product | Assets quietly go on describing last quarter's UI               | Regenerated from the real app, so a stale listing is a failing job                          |
+| Localisation                | A duplicated artboard set per language                          | A JSON file per locale; captions wrap and rebalance to fit                                  |
+| Device coverage             | Re-crop and re-lay-out for each store's required sizes          | Four targets cover both stores, in points and scale factors rather than magic numbers       |
+| Store rules                 | Read the guidelines and hope                                    | Encoded and enforced: a wrong size, a stray alpha channel or a file over 8 MB fails the run |
+| Review                      | A PNG in a Slack thread                                         | Images in a pull request diff                                                               |
+| Who can do it               | Whoever owns the design file                                    | Anyone editing one file, including an agent                                                 |
 
 ## Install
 
@@ -47,70 +58,155 @@ skipped over in the stack.
 
 ## Quick start
 
-### A native app
+The examples below build the real App Store and Play sets for
+[Rally](https://getrally.com), a fleet expense platform that ships on both
+stores.
+
+### iOS
+
+`storeshot.ios.config.ts` — the App Store set, captured from the real build in
+the Simulator. Requires macOS with Xcode.
 
 ```ts
-import { defineConfig } from 'storeshot';
+import { defineConfig, findTarget } from 'storeshot';
 
 export default defineConfig({
+  // Rally's iOS app is iPhone-only, so the iPad target comes off. Apple scales
+  // the 6.9" set down for every smaller iPhone, so one target covers them all.
+  targets: [findTarget('ios-iphone-6.9')],
+
   capture: {
-    ios: {
-      kind: 'ios-simulator',
-      device: 'iPhone 17 Pro Max',
-      bundleId: 'com.acme.App',
-      appPath: 'build/App.app',
-    },
-    android: {
-      kind: 'android-emulator',
-      appId: 'com.acme.app',
-      apkPath: 'build/app-release.apk',
-    },
+    kind: 'ios-simulator',
+    // First name that exists wins, and an already-booted device is preferred.
+    device: ['iPhone 17 Pro Max', 'iPhone 16 Pro Max'],
+    bundleId: 'com.getrally',
+    appPath: 'ios/App/build/Debug-iphonesimulator/App.app',
   },
+
+  // A launch and a route change need longer to settle than a browser does.
+  settleDelay: 2500,
+
   screens: [
-    { id: 'home', deepLink: 'acme://home', theme: 'dark' },
-    { id: 'search', deepLink: 'acme://search', theme: 'dark' },
+    { id: 'platform', theme: 'dark' },
+    { id: 'transactions', theme: 'dark' },
+    { id: 'cards', theme: 'dark' },
   ],
+
   captions: {
     en: {
-      home: { kicker: 'Overview', title: 'Everything in one place' },
-      search: { kicker: 'Search', title: 'Find it in a keystroke' },
+      platform: { kicker: 'Payments', title: 'Every fleet expense, one app' },
+      transactions: {
+        kicker: 'Transactions',
+        title: 'See every purchase as it happens',
+      },
+      cards: { kicker: 'Cards', title: 'Issue cards in seconds, not days' },
     },
   },
 });
 ```
 
-`baseUrl` is only needed for browser captures. If your app has no deep links,
+```bash
+npx storeshot --config storeshot.ios.config.ts
+```
+
+Captures come out full-screen, with the device's own status bar, pinned to 9:41
+on a full battery. Rally's screens are ordinary in-app routes with no URL scheme
+behind them, so this run stops and asks you to navigate before each capture. Give
+a screen a `deepLink`, or the config a `navigate` hook, to make it unattended —
 see [Navigating a native app](#navigating-a-native-app).
 
-Captions wrap to fit and, at two lines, rebalance so the lines come out close to
-equal instead of leaving a stub on the second. Put a `\n` in a title to break it
-somewhere specific and that is used verbatim.
+### Android
 
-### A web app
+`storeshot.android.config.ts` — the Play set, from the release APK on an
+emulator. Requires the Android SDK platform tools on your `PATH`.
+
+```ts
+import { defineConfig, findTarget } from 'storeshot';
+
+export default defineConfig({
+  // Play asks for a phone and a tablet asset separately.
+  targets: [findTarget('android-phone'), findTarget('android-tablet')],
+
+  capture: {
+    kind: 'android-emulator',
+    appId: 'com.getrally.app',
+    apkPath: 'android/app/build/outputs/apk/release/app-release.apk',
+    // Booted when nothing is already attached. Omit to use `adb`'s only device.
+    avd: 'Pixel_5_API_35',
+  },
+
+  screens: [
+    {
+      id: 'platform',
+      deepLink: 'https://app.getrally.com/home',
+      theme: 'dark',
+    },
+    {
+      id: 'cards',
+      deepLink: 'https://app.getrally.com/home/cards',
+      theme: 'dark',
+    },
+  ],
+
+  captions: {
+    en: {
+      platform: { kicker: 'Payments', title: 'Every fleet expense, one app' },
+      cards: { kicker: 'Cards', title: 'Issue cards in seconds, not days' },
+    },
+  },
+});
+```
+
+```bash
+npx storeshot --config storeshot.android.config.ts
+```
+
+A `deepLink` here is anything `adb shell am start` can open, so an app link like
+the one above works without registering a custom scheme, as long as the app
+declares the intent filter. Play allows the device to bleed off the bottom edge,
+and these targets do, where the App Store ones above keep the bezel whole.
+
+### A web or hybrid app
+
+Rally is a Capacitor app, so the same screens can be captured headless in
+seconds without building either binary — WebKit for iOS targets, Chromium for
+Android ones, matching the web view each platform actually runs. This is Rally's
+default config, with the two native ones above kept for checking the native shell
+before a listing refresh.
 
 ```ts
 import { defineConfig } from 'storeshot';
 
 export default defineConfig({
-  baseUrl: 'http://localhost:3000',
+  baseUrl: process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3000',
   screens: [
-    { id: 'home', path: '/', theme: 'dark', waitFor: ['[data-ready]'] },
-    { id: 'search', path: '/search', theme: 'dark' },
+    {
+      id: 'platform',
+      path: '/home/acme',
+      theme: 'dark',
+      // Nothing is captured until these are on screen, so no skeletons.
+      waitFor: ['[data-slot="card"]'],
+    },
   ],
   captions: {
-    /* as above */
+    // as above
   },
+  // Signs in once; the session is reused across targets.
+  auth: ({ page }) => signIn(page),
 });
 ```
-
-Either way:
 
 ```bash
 npx storeshot
 ```
 
-Assets land in `screenshots/framed/<locale>/<target>/` and are copied into
-`fastlane/` in the layout `deliver` and `supply` expect.
+Whichever route you take, assets land in
+`screenshots/framed/<locale>/<target>/` and are copied into `fastlane/` in the
+layout `deliver` and `supply` expect.
+
+Captions wrap to fit and, at two lines, rebalance so the lines come out close to
+equal instead of leaving a stub on the second. Put a `\n` in a title to break it
+somewhere specific and that is used verbatim.
 
 ## What comes out
 
@@ -391,8 +487,9 @@ TypeScript loader will not work. The CLI handles this for you.
 for native apps, and if you already run them happily there is little reason to
 switch. The differences that motivated this: capture is a driver rather than a
 requirement, so native, web and pre-made screenshots go through one pipeline;
-composition is CSS instead of ImageMagick, so captions reflow and the layout uses
-your own design tokens; and it needs no UI-test suite to get started. Deliberately
+composition is SVG and Pango through sharp instead of ImageMagick, so captions
+reflow and the layout uses your own design tokens; and it needs no UI-test suite
+to get started. Deliberately
 not reimplemented is running your tests — `xcodebuild test` is fastlane's job, and
 the `import` driver consumes whatever it produces. The device bezels come from
 fastlane's own frame set.
