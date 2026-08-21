@@ -33,8 +33,8 @@ const FREEZE_STYLES = `
 `;
 
 /**
- * WebKit for iOS targets and Chromium for Android ones, so the render engine
- * matches the web view the app will actually run in.
+ * WebKit for Apple targets and Chromium for Android ones, so the render engine
+ * matches the browser engine the app will run in.
  */
 function engineFor(spec: WebCapture, target?: TargetSpec): BrowserEngine {
   return spec.engine ?? (target?.platform === 'android' ? 'chromium' : 'webkit');
@@ -120,8 +120,8 @@ async function createContext(
     baseURL: config.baseUrl,
     viewport: pageViewport(target),
     deviceScaleFactor: target.deviceScaleFactor,
-    isMobile: target.deliveryKind !== 'tablet',
-    hasTouch: true,
+    isMobile: target.platform !== 'macos',
+    hasTouch: target.platform !== 'macos',
     reducedMotion: 'reduce',
     storageState: (await hasStoredAuth(config))
       ? config.paths.authState

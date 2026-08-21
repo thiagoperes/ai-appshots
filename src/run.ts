@@ -132,7 +132,7 @@ export async function runCompose(options: RunOptions) {
         if (!caption) {
           fail(
             `No caption for screen "${screen.id}" in locale "${locale}".`,
-            'Add it to the captions map in your storeshot config.',
+            'Add it to the captions map in your ai-appshots config.',
           );
         }
 

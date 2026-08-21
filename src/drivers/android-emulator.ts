@@ -150,7 +150,7 @@ async function resolveSerial(
 
   throw new Error(
     `No Android device is attached for target "${target.id}". Start an ` +
-      `emulator, or set "avd" on its capture spec so storeshot boots one.`,
+      `emulator, or set "avd" on its capture spec so ai-appshots boots one.`,
   );
 }
 

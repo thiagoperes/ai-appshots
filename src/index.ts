@@ -1,7 +1,13 @@
 export { defineConfig, loadConfig, parseOptions } from './config';
 export type { RunOptions } from './config';
 export { run, runCapture, runCompose } from './run';
-export { DEFAULT_TARGETS, findTarget, STORE_POLICIES } from './targets';
+export {
+  BUILT_IN_TARGETS,
+  DEFAULT_TARGETS,
+  MACOS_TARGET,
+  findTarget,
+  STORE_POLICIES,
+} from './targets';
 export type { StorePolicy } from './targets';
 export { DEFAULT_THEME, MONO_STACK, SANS_STACK, resolveTheme } from './theme';
 export { renderCanvas } from './render/canvas';

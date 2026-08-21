@@ -9,18 +9,18 @@ import { fail } from './log';
 import { resolvePaths } from './paths';
 import { DEFAULT_TARGETS, findTarget } from './targets';
 import { resolveTheme } from './theme';
-import type { ResolvedConfig, ScreenSpec, StoreshotConfig } from './types';
+import type { ResolvedConfig, ScreenSpec, AiAppshotsConfig } from './types';
 
 /** Identity helper that gives config files type checking and completion. */
-export function defineConfig(config: StoreshotConfig): StoreshotConfig {
+export function defineConfig(config: AiAppshotsConfig): AiAppshotsConfig {
   return config;
 }
 
 const CONFIG_NAMES = [
-  'storeshot.config.ts',
-  'storeshot.config.mts',
-  'storeshot.config.js',
-  'storeshot.config.mjs',
+  'ai-appshots.config.ts',
+  'ai-appshots.config.mts',
+  'ai-appshots.config.js',
+  'ai-appshots.config.mjs',
 ];
 
 async function exists(path: string) {
@@ -64,7 +64,7 @@ async function findConfig(explicit: string | undefined, cwd: string) {
     if (parent === dir) {
       return fail(
         `No ${CONFIG_NAMES[0]} found in ${cwd} or any parent directory.`,
-        'Create one with `defineConfig` from "storeshot", or pass --config.',
+        'Create one with `defineConfig` from "ai-appshots", or pass --config.',
       );
     }
 
@@ -83,7 +83,7 @@ export async function loadConfig(
 ): Promise<ResolvedConfig> {
   const path = await findConfig(explicit, cwd);
   const jiti = createJiti(pathToFileURL(path).href, { interopDefault: true });
-  const loaded = (await jiti.import(path, { default: true })) as StoreshotConfig;
+  const loaded = (await jiti.import(path, { default: true })) as AiAppshotsConfig;
 
   if (!loaded?.screens?.length) {
     fail(`${path} must export a config with at least one screen.`);
@@ -113,9 +113,9 @@ export interface RunOptions {
   readonly freshAuth: boolean;
 }
 
-export const USAGE = `Usage: storeshot [options]
+export const USAGE = `Usage: ai-appshots [options]
 
-  --config <path>    Config file. Default: nearest storeshot.config.ts.
+  --config <path>    Config file. Default: nearest ai-appshots.config.ts.
   --base-url <url>   Override the app URL from the config.
   --target <id>      Only this target (repeatable). Default: all.
   --screen <id>      Only this screen (repeatable). Default: all.

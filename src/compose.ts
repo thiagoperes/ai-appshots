@@ -141,12 +141,14 @@ export async function composeScreenshot(options: {
     : await buildScreen(target, capture, canvas.sansFont);
 
   const device =
-    frame.kind === 'css'
-      ? await renderCssBezel(screen, frame, captureSize(target).width)
-      : await renderFramedDevice(
-          screen,
-          await loadFrameitFrame(target, frame, options.frameCacheDir),
-        );
+    frame.kind === 'none'
+      ? screen
+      : frame.kind === 'css'
+        ? await renderCssBezel(screen, frame, captureSize(target).width)
+        : await renderFramedDevice(
+            screen,
+            await loadFrameitFrame(target, frame, options.frameCacheDir),
+          );
 
   return renderCanvas({
     output: target.output,

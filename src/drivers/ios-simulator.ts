@@ -202,7 +202,7 @@ async function navigate(
 }
 
 async function screenshot(device: SimulatorDevice, label: string) {
-  const path = resolve(tmpdir(), `storeshot-${randomUUID()}.png`);
+  const path = resolve(tmpdir(), `ai-appshots-${randomUUID()}.png`);
 
   try {
     await execChecked(
