@@ -58,7 +58,7 @@ function buildFramePixels(): Buffer {
 }
 
 async function renderOnSyntheticFrame() {
-  const dir = await mkdtemp(join(tmpdir(), 'storeshot-frames-'));
+  const dir = await mkdtemp(join(tmpdir(), 'ai-appshots-frames-'));
 
   after(() => rm(dir, { recursive: true, force: true }));
 
