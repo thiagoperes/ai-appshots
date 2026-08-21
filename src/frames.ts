@@ -2,9 +2,11 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 
 import sharp from 'sharp';
 
-import { ensureDir } from './paths';
-import { info } from './log';
-import type { FrameAsset, FrameitFrame, Size, TargetSpec } from './types';
+// Extensions so the file also loads under `node --test`'s type stripping,
+// which does not resolve extensionless specifiers. jiti accepts both.
+import { ensureDir } from './paths.ts';
+import { info } from './log.ts';
+import type { FrameAsset, FrameitFrame, Size, TargetSpec } from './types.ts';
 
 const FRAMES_BASE_URL =
   'https://raw.githubusercontent.com/fastlane/frameit-frames/gh-pages/latest';
@@ -98,9 +100,12 @@ const OPAQUE_THRESHOLD = 128;
  * square corners of a capture bleed past the device's rounded screen, which is
  * visible as sharp corners poking out of the bezel. Everything reachable from
  * the border is outside the device; the transparency that survives is the
- * screen. Partial alpha is preserved so the rounded corners stay antialiased.
+ * screen. Within the device the mask stays solid — the bezel's own alpha
+ * handles the antialiasing where it overlaps the screen.
+ *
+ * Exported for tests.
  */
-function buildScreenMask(
+export function buildScreenMask(
   pixels: Buffer,
   size: Size,
   offset: { x: number; y: number },
@@ -152,7 +157,12 @@ function buildScreenMask(
     for (let x = 0; x < screen.width; x += 1) {
       const source = (y + offset.y) * width + (x + offset.x);
       const target = (y * screen.width + x) * 4;
-      const coverage = outside[source] ? 0 : 255 - pixels[source * 4 + 3]!;
+      // Solid inside the cutout: the screen extends under the bezel's
+      // anti-aliased inner edge and the frame blends over it, so screen +
+      // frame always sum to full coverage. Feathering the mask by the
+      // frame's alpha instead leaves 1 - f + f^2 coverage at edge pixels,
+      // which reads as a light hairline against a light canvas.
+      const coverage = outside[source] ? 0 : 255;
 
       mask[target] = 255;
       mask[target + 1] = 255;
