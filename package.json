@@ -1,6 +1,6 @@
 {
-  "name": "storeshot",
-  "version": "0.3.0",
+  "name": "ai-appshots",
+  "version": "0.4.0",
   "description": "Apple and Google Play store screenshots, built by agents, for agents.",
   "keywords": [
     "app-store",
@@ -9,6 +9,7 @@
     "fastlane",
     "frameit",
     "ios",
+    "macos",
     "android",
     "simulator",
     "xcuitest",
@@ -20,13 +21,13 @@
   "author": "Thiago Peres",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thiagoperes/storeshot.git"
+    "url": "git+https://github.com/thiagoperes/ai-appshots.git"
   },
-  "bugs": "https://github.com/thiagoperes/storeshot/issues",
-  "homepage": "https://github.com/thiagoperes/storeshot#readme",
+  "bugs": "https://github.com/thiagoperes/ai-appshots/issues",
+  "homepage": "https://github.com/thiagoperes/ai-appshots#readme",
   "type": "module",
   "bin": {
-    "storeshot": "./bin/storeshot.mjs"
+    "ai-appshots": "bin/ai-appshots.mjs"
   },
   "types": "./src/index.ts",
   "exports": {

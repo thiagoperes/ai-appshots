@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
-import type { ResolvedPaths, StoreshotConfig } from './types';
+import type { ResolvedPaths, AiAppshotsConfig } from './types';
 
 function from(root: string, value: string | undefined, fallback: string) {
   if (!value) {
@@ -17,7 +17,7 @@ function from(root: string, value: string | undefined, fallback: string) {
  * so a fresh project needs no path settings at all.
  */
 export function resolvePaths(
-  config: StoreshotConfig,
+  config: AiAppshotsConfig,
   configDir: string,
 ): ResolvedPaths {
   const root = from(configDir, config.rootDir, '.');

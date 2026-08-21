@@ -6,7 +6,7 @@ export type BrowserEngine = 'webkit' | 'chromium';
 
 export type ThemeName = 'light' | 'dark';
 
-export type Platform = 'ios' | 'android';
+export type Platform = 'ios' | 'android' | 'macos';
 
 /** @deprecated Use {@link Platform}. */
 export type StatusBarPlatform = Platform;
@@ -44,7 +44,12 @@ export interface CssFrame {
   readonly color: string;
 }
 
-export type FrameSpec = FrameitFrame | CssFrame;
+/** Leaves desktop captures unframed. */
+export interface NoFrame {
+  readonly kind: 'none';
+}
+
+export type FrameSpec = FrameitFrame | CssFrame | NoFrame;
 
 export interface TargetSpec {
   readonly id: string;
@@ -88,7 +93,7 @@ export interface TargetSpec {
    */
   readonly statusBarTextSize: number;
   /** Subdirectory used when arranging assets for fastlane. */
-  readonly deliveryKind: 'ios' | 'phone' | 'tablet';
+  readonly deliveryKind: 'ios' | 'macos' | 'phone' | 'tablet';
 }
 
 export interface ScreenSpec {
@@ -308,7 +313,7 @@ export interface PrepareContext {
   readonly baseUrl: string;
 }
 
-export interface StoreshotConfig {
+export interface AiAppshotsConfig {
   /**
    * Origin of the running app, e.g. `http://localhost:3000`. Required for
    * browser captures and unused by every other capture source.
@@ -368,7 +373,7 @@ export interface ResolvedPaths {
   readonly fastlane: string;
 }
 
-export interface ResolvedConfig extends StoreshotConfig {
+export interface ResolvedConfig extends AiAppshotsConfig {
   readonly baseUrl: string;
   readonly targets: readonly TargetSpec[];
   readonly theme: CanvasTheme;

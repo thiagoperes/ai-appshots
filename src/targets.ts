@@ -28,12 +28,28 @@ export const STORE_POLICIES: Readonly<Record<StoreId, StorePolicy>> = {
  * - App Store 13" iPad accepts both 2064x2752 and 2048x2732. The newest iPad
  *   bezel frameit ships expects 2048x2732, which is why the capture is that
  *   size while the canvas uses the larger accepted value.
+ * - The Mac App Store accepts 16:10 screenshots at 2880x1800.
  * - Play requires 9:16 portrait between 1080px and 7680px, with the long edge
  *   no more than twice the short edge.
  *
  * @see https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications
  * @see https://support.google.com/googleplay/android-developer/answer/9866151
  */
+export const MACOS_TARGET: TargetSpec = {
+  id: 'macos-16:10',
+  store: 'app-store',
+  platform: 'macos',
+  viewport: { width: 1440, height: 900 },
+  deviceScaleFactor: 2,
+  output: { width: 2880, height: 1800 },
+  frame: { kind: 'none' },
+  captionScale: 0.032,
+  captionGapRatio: 0.035,
+  statusBarHeight: 0,
+  statusBarTextSize: 0,
+  deliveryKind: 'macos',
+};
+
 export const DEFAULT_TARGETS: readonly TargetSpec[] = [
   {
     id: 'ios-iphone-6.9',
@@ -115,9 +131,15 @@ export const DEFAULT_TARGETS: readonly TargetSpec[] = [
   },
 ];
 
+/** All targets available through `findTarget`; macOS remains opt-in. */
+export const BUILT_IN_TARGETS: readonly TargetSpec[] = [
+  ...DEFAULT_TARGETS,
+  MACOS_TARGET,
+];
+
 export function findTarget(
   id: string,
-  targets: readonly TargetSpec[] = DEFAULT_TARGETS,
+  targets: readonly TargetSpec[] = BUILT_IN_TARGETS,
 ): TargetSpec {
   const target = targets.find((candidate) => candidate.id === id);
 

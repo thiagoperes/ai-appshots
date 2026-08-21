@@ -1,8 +1,8 @@
-# storeshot
+# ai-appshots
 
 Apple and Google Play store screenshots, built by agents, for agents.
 
-- ⚡ **One command** — `npx storeshot` captures, frames and stages a whole set, in CI or locally.
+- ⚡ **One command** — `npx ai-appshots` captures, frames and stages a whole set, in CI or locally.
 - 📱 **Native, web, or hybrid** — one pipeline for the iOS Simulator, an Android emulator, a headless browser, or PNGs something else produced. The rest of the field picks a side.
 - 🌍 **Locales are JSON** — captions wrap and rebalance to fit; nothing overflows.
 - 🎯 **Store rules, enforced** — exact sizes, no alpha, under 8 MB, Apple bezels whole, Android free to bleed. A bad asset fails the run, not the upload.
@@ -49,12 +49,12 @@ The other ways of doing this all make you give something up:
 | 🎨 **Design templates**   | Drift the moment the UI ships; every device and locale is re-exported by hand               |
 | 💸 **Hosted generators**  | A subscription, an account, and your app's screens on someone else's servers                |
 
-storeshot gives up none of them.
+ai-appshots gives up none of them.
 
 ## Install
 
 ```bash
-npm install --save-dev github:thiagoperes/storeshot
+npm install --save-dev ai-appshots
 ```
 
 Node 20 or newer. Nothing else, and no browser: the marketing canvas is composed
@@ -83,11 +83,11 @@ stores.
 
 ### iOS
 
-`storeshot.ios.config.ts` — the App Store set, captured from the real build in
+`ai-appshots.ios.config.ts` — the App Store set, captured from the real build in
 the Simulator. Requires macOS with Xcode.
 
 ```ts
-import { defineConfig, findTarget } from 'storeshot';
+import { defineConfig, findTarget } from 'ai-appshots';
 
 export default defineConfig({
   // Rally's iOS app is iPhone-only, so the iPad target comes off. Apple scales
@@ -125,7 +125,7 @@ export default defineConfig({
 ```
 
 ```bash
-npx storeshot --config storeshot.ios.config.ts
+npx ai-appshots --config ai-appshots.ios.config.ts
 ```
 
 Captures come out full-screen, with the device's own status bar, pinned to 9:41
@@ -136,11 +136,11 @@ see [Navigating a native app](#navigating-a-native-app).
 
 ### Android
 
-`storeshot.android.config.ts` — the Play set, from the release APK on an
+`ai-appshots.android.config.ts` — the Play set, from the release APK on an
 emulator. Requires the Android SDK platform tools on your `PATH`.
 
 ```ts
-import { defineConfig, findTarget } from 'storeshot';
+import { defineConfig, findTarget } from 'ai-appshots';
 
 export default defineConfig({
   // Play asks for a phone and a tablet asset separately.
@@ -177,7 +177,7 @@ export default defineConfig({
 ```
 
 ```bash
-npx storeshot --config storeshot.android.config.ts
+npx ai-appshots --config ai-appshots.android.config.ts
 ```
 
 A `deepLink` here is anything `adb shell am start` can open, so an app link like
@@ -194,7 +194,7 @@ default config, with the two native ones above kept for checking the native shel
 before a listing refresh.
 
 ```ts
-import { defineConfig } from 'storeshot';
+import { defineConfig } from 'ai-appshots';
 
 export default defineConfig({
   baseUrl: process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3000',
@@ -216,7 +216,7 @@ export default defineConfig({
 ```
 
 ```bash
-npx storeshot
+npx ai-appshots
 ```
 
 Whichever route you take, assets land in
@@ -383,7 +383,7 @@ a deep link. Raise `settleDelay` if a capture lands mid-transition.
 Everything below `screens` and `captions` is optional.
 
 ```ts
-import { defineConfig } from 'storeshot';
+import { defineConfig } from 'ai-appshots';
 
 import en from './captions/en.json' with { type: 'json' };
 
@@ -459,9 +459,9 @@ Import `DEFAULT_TARGETS` and spread it, or write your own `TargetSpec[]`.
 ## CLI
 
 ```
-storeshot [options]
+ai-appshots [options]
 
-  --config <path>    Config file. Default: nearest storeshot.config.ts.
+  --config <path>    Config file. Default: nearest ai-appshots.config.ts.
   --base-url <url>   Override the app URL from the config.
   --target <id>      Only this target (repeatable). Default: all.
   --screen <id>      Only this screen (repeatable). Default: all.
@@ -488,12 +488,12 @@ coding agent. Useful things to ask for:
 - "Rewrite the captions to lead with the benefit, keep them under six words."
 - "Try the halo in our accent colour and show me the iPhone set."
 
-Each is a small edit to one file followed by `storeshot --skip-capture`, and the
+Each is a small edit to one file followed by `ai-appshots --skip-capture`, and the
 diff is reviewable as images in a pull request. The library API is exported too,
 if you would rather script the pipeline than shell out:
 
 ```ts
-import { loadConfig, parseOptions, run } from 'storeshot';
+import { loadConfig, parseOptions, run } from 'ai-appshots';
 ```
 
 Note that the package ships TypeScript source and is loaded through

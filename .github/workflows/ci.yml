@@ -38,7 +38,7 @@ jobs:
           mkdir -p /tmp/smoke/site
           cd /tmp/smoke
           npm init -y > /dev/null
-          npm install /tmp/storeshot-*.tgz
+          npm install /tmp/ai-appshots-*.tgz
           cat > site/index.html <<'HTML'
           <!doctype html>
           <title>smoke</title>
@@ -46,8 +46,8 @@ jobs:
             <div data-ready style="padding:64px">Hello</div>
           </body>
           HTML
-          cat > storeshot.config.ts <<'TS'
-          import { defineConfig } from 'storeshot';
+          cat > ai-appshots.config.ts <<'TS'
+          import { defineConfig } from 'ai-appshots';
 
           export default defineConfig({
             baseUrl: 'http://127.0.0.1:8123',
@@ -71,7 +71,7 @@ jobs:
         run: |
           python3 -m http.server 8123 --directory site &
           npx wait-on http://127.0.0.1:8123
-          npx storeshot
+          npx ai-appshots
 
       - name: Check every target produced an asset
         working-directory: /tmp/smoke
@@ -100,7 +100,7 @@ jobs:
               .toFile('incoming/ios-iphone-6.9/home.png');
           "
           cat > import.config.ts <<'TS'
-          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'ai-appshots';
 
           export default defineConfig({
             outDir: 'imported',
@@ -110,14 +110,14 @@ jobs:
             captions: { en: { home: { title: 'Imported' } } },
           });
           TS
-          npx storeshot --config import.config.ts
+          npx ai-appshots --config import.config.ts
           test -f imported/framed/en/ios-iphone-6.9/01-home.png
 
       - name: Refuse a capture that is the wrong shape
         working-directory: /tmp/smoke
         run: |
           cp screenshots/raw/en/ios-iphone-6.9/home.png incoming/ios-iphone-6.9/
-          if npx storeshot --config import.config.ts 2>err.log; then
+          if npx ai-appshots --config import.config.ts 2>err.log; then
             echo 'expected the page crop to be rejected'
             exit 1
           fi
@@ -147,7 +147,7 @@ jobs:
           mkdir -p /tmp/native/site
           cd /tmp/native
           npm init -y > /dev/null
-          npm install /tmp/storeshot-*.tgz
+          npm install /tmp/ai-appshots-*.tgz
           cat > site/index.html <<'HTML'
           <!doctype html>
           <title>native smoke</title>
@@ -155,8 +155,8 @@ jobs:
             <div style="padding:120px 48px">Captured from a real iOS Simulator</div>
           </body>
           HTML
-          cat > storeshot.config.ts <<'TS'
-          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+          cat > ai-appshots.config.ts <<'TS'
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'ai-appshots';
 
           export default defineConfig({
             baseUrl: 'http://127.0.0.1:8123',
@@ -179,7 +179,7 @@ jobs:
         run: |
           python3 -m http.server 8123 --directory site &
           npx wait-on http://127.0.0.1:8123
-          npx storeshot
+          npx ai-appshots
 
       - name: Check the asset exists and is full-screen
         working-directory: /tmp/native
@@ -222,10 +222,10 @@ jobs:
           npm init -y > /dev/null
           # Playwright is an optional peer dependency, so a plain install brings
           # neither the package nor any browser binary.
-          npm install /tmp/storeshot-*.tgz
+          npm install /tmp/ai-appshots-*.tgz
           test ! -d node_modules/playwright
-          cat > storeshot.config.ts <<'TS'
-          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+          cat > ai-appshots.config.ts <<'TS'
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'ai-appshots';
 
           export default defineConfig({
             targets: [findTarget('ios-iphone-6.9', DEFAULT_TARGETS)],
@@ -247,7 +247,7 @@ jobs:
               .png()
               .toFile('incoming/ios-iphone-6.9/home.png');
           "
-          npx storeshot
+          npx ai-appshots
           node -e "
             const { readFileSync } = require('node:fs');
             const png = readFileSync(
@@ -264,7 +264,7 @@ jobs:
         working-directory: /tmp/headless
         run: |
           cat > web.config.ts <<'TS'
-          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'storeshot';
+          import { defineConfig, DEFAULT_TARGETS, findTarget } from 'ai-appshots';
 
           export default defineConfig({
             baseUrl: 'http://127.0.0.1:8123',
@@ -273,7 +273,7 @@ jobs:
             captions: { en: { home: { title: 'Needs a browser' } } },
           });
           TS
-          if npx storeshot --config web.config.ts 2>err.log; then
+          if npx ai-appshots --config web.config.ts 2>err.log; then
             echo 'expected the web capture to fail without Playwright'
             exit 1
           fi
