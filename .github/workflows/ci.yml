@@ -165,6 +165,9 @@ jobs:
             capture: {
               kind: 'ios-simulator',
               device: ['iPhone 17 Pro Max', 'iPhone 16 Pro Max', 'iPhone 15 Pro Max'],
+              managedDeviceName: 'ai-appshots CI iPhone',
+              eraseBeforeCapture: true,
+              shutdownAfterCapture: true,
               bundleId: 'com.apple.mobilesafari',
             },
             screens: [
