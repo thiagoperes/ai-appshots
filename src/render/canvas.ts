@@ -1,11 +1,11 @@
 import sharp from 'sharp';
 import type { OverlayOptions } from 'sharp';
 
-import { ellipseGradientToSvg, linearGradientToSvg, toPaint } from './color';
-import { wrap } from './text';
-import { typesetLine } from './typeset';
-import type { TextStyle } from './typeset';
-import type { CanvasTheme, Caption, Size, ThemeName } from '../types';
+import { ellipseGradientToSvg, linearGradientToSvg, toPaint } from './color.ts';
+import { wrap } from './text.ts';
+import { typesetLine } from './typeset.ts';
+import type { TextStyle } from './typeset.ts';
+import type { CanvasTheme, Caption, Size, ThemeName } from '../types.ts';
 
 /**
  * Lays out the marketing canvas: backdrop, caption, and the framed device.
@@ -204,7 +204,7 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
 
   const probe = layoutFor(options, ['', ''], Boolean(caption.kicker));
   const titleStyle: TextStyle = {
-    family: canvas.sansFont,
+    family: canvas.titleFont ?? canvas.sansFont,
     size: probe.titleSize,
     weight: 700,
     letterSpacing: probe.titleSize * -0.032,
@@ -224,7 +224,7 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   const layout = layoutFor(options, lines, Boolean(label));
 
   const kickerStyle: TextStyle = {
-    family: canvas.monoFont,
+    family: canvas.kickerFont ?? canvas.monoFont,
     size: layout.kickerSize,
     weight: 500,
     letterSpacing: layout.kickerSize * 0.22,

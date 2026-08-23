@@ -1,5 +1,5 @@
-import { measureLine } from './typeset';
-import type { TextStyle } from './typeset';
+import { measureLine } from './typeset.ts';
+import type { TextStyle } from './typeset.ts';
 
 /**
  * Line breaking for captions. SVG draws text but never wraps it, so breaks are

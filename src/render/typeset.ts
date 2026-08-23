@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 
-import { escapeXml, toPaint } from './color';
+import { escapeXml, toPaint } from './color.ts';
 
 /**
  * Shapes single lines of text with Pango, the shaper librsvg and GTK use.
@@ -89,7 +89,7 @@ export async function typesetLine(
       `Could not render "${text}" in "${style.family}". No usable font was ` +
         `found.\nInstall at least one font — on a slim Linux image that means a ` +
         `package such as fonts-dejavu-core — or name an installed family in ` +
-        `the theme's sansFont and monoFont.`,
+        `the theme's titleFont, kickerFont, sansFont, or monoFont.`,
     );
   }
 

@@ -167,6 +167,10 @@ export interface CanvasPalette {
 export interface CanvasTheme {
   readonly dark: CanvasPalette;
   readonly light: CanvasPalette;
+  /** Title face. Falls back to `sansFont` for backwards compatibility. */
+  readonly titleFont?: string;
+  /** Kicker face. Falls back to `monoFont` for backwards compatibility. */
+  readonly kickerFont?: string;
   readonly monoFont: string;
   readonly sansFont: string;
   /** Renders the `[ 01 ]` index before the kicker. */
