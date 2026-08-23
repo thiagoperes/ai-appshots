@@ -188,10 +188,17 @@ export interface WebCapture {
 export interface IosSimulatorCapture {
   readonly kind: 'ios-simulator';
   /**
-   * Simulator device name, or an ordered list of acceptable names. The first
-   * available one wins, and an already-booted device is preferred.
+   * Simulator device type name, or an ordered list of acceptable type names.
+   * Without `managedDeviceName`, these also remain the instance names used for
+   * lookup so existing configurations keep their original behaviour.
    */
   readonly device: string | readonly string[];
+  /**
+   * Exact CoreSimulator instance name owned by this capture pipeline. When it
+   * does not exist, the driver creates it using the first installed `device`
+   * type. Other instances of that device type are never selected.
+   */
+  readonly managedDeviceName?: string;
   /** Bundle identifier to launch. Omit to capture whatever is on screen. */
   readonly bundleId?: string;
   /** `.app` bundle to install before launching. */
@@ -201,6 +208,17 @@ export interface IosSimulatorCapture {
    * a fresh machine or CI runner. On by default.
    */
   readonly createIfMissing?: boolean;
+  /**
+   * Erases the managed simulator before booting it. Requires
+   * `managedDeviceName` so an arbitrary matching simulator cannot be erased.
+   * Off by default.
+   */
+  readonly eraseBeforeCapture?: boolean;
+  /**
+   * Shuts down the managed simulator when the capture session closes, including
+   * after a capture failure. Requires `managedDeviceName`. Off by default.
+   */
+  readonly shutdownAfterCapture?: boolean;
   /**
    * Pins the status bar to 9:41, full battery and full signal. Apple has shown
    * that time in iPhone marketing since the original keynote.
