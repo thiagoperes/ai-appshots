@@ -205,8 +205,9 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   const probe = layoutFor(options, ['', ''], Boolean(caption.kicker));
   const titleStyle: TextStyle = {
     family: canvas.titleFont ?? canvas.sansFont,
+    ...(canvas.titleFontFile ? { fontFile: canvas.titleFontFile } : {}),
     size: probe.titleSize,
-    weight: 700,
+    weight: canvas.titleWeight ?? 700,
     letterSpacing: probe.titleSize * -0.032,
     colour: palette.title,
   };
