@@ -169,6 +169,13 @@ export interface CanvasTheme {
   readonly light: CanvasPalette;
   /** Title face. Falls back to `sansFont` for backwards compatibility. */
   readonly titleFont?: string;
+  /**
+   * Absolute path to the title font file. When set, the renderer reads the
+   * glyphs directly so local font installation cannot change the output.
+   */
+  readonly titleFontFile?: string;
+  /** Title weight. Defaults to 700. */
+  readonly titleWeight?: number;
   /** Kicker face. Falls back to `monoFont` for backwards compatibility. */
   readonly kickerFont?: string;
   readonly monoFont: string;
