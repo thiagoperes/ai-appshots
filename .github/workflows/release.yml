@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, such as v0.6.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  id-token: write
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.15.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Validate the release and check npm
+        id: version
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (pkg.name !== 'ai-appshots' || !/^\d+\.\d+\.\d+$/.test(pkg.version) ||
+              process.env.RELEASE_TAG !== `v${pkg.version}`) {
+            throw new Error('Release tag must match a stable ai-appshots package version.');
+          }
+          const response = await fetch(`https://registry.npmjs.org/ai-appshots/${pkg.version}`);
+          if (response.status !== 404 && !response.ok) {
+            throw new Error(`Cannot check npm: HTTP ${response.status}`);
+          }
+          const published = response.ok;
+          if (published && (await response.json()).version !== pkg.version) {
+            throw new Error('Unexpected npm version response.');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\npublished=${published}\n`);
+          console.log(published ? `${pkg.name}@${pkg.version} is already published; skipping.` : `Preparing ${pkg.name}@${pkg.version}.`);
+          JS
+
+      - name: Require the existing publish token
+        if: steps.version.outputs.published != 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo '::error::Missing NPM_TOKEN repository secret with publishing access to ai-appshots. Configure the existing publishing token; do not use browser authentication or npm login.'
+            exit 1
+          fi
+
+      - name: Require successful CI for the tagged commit
+        if: steps.version.outputs.published != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo '::error::Dispatch the Release workflow from the release tag itself so provenance identifies the published commit.'
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/commits/$(git rev-parse HEAD)/check-runs?per_page=100" > "$RUNNER_TEMP/release-checks.json"
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          const { check_runs: checks } = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/release-checks.json`, 'utf8'));
+          for (const name of ['typecheck', 'smoke', 'smoke-ios', 'smoke-no-browser']) {
+            const check = checks.filter(check => check.name === name && check.app?.slug === 'github-actions')
+              .sort((a, b) => b.id - a.id)[0];
+            if (check?.status !== 'completed' || check.conclusion !== 'success') {
+              throw new Error(`CI job ${name} must succeed for the tagged commit before publishing. Retry the Release workflow after CI passes.`);
+            }
+          }
+          JS
+
+      - if: steps.version.outputs.published != 'true'
+        run: npm ci
+      - if: steps.version.outputs.published != 'true'
+        run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+      - name: Publish with the token and signed provenance
+        if: steps.version.outputs.published != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: npm publish "$RUNNER_TEMP/ai-appshots-$PACKAGE_VERSION.tgz" --access public --tag latest --provenance --ignore-scripts
+      - name: Verify the published artifact
+        if: steps.version.outputs.published != 'true'
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const version = process.env.PACKAGE_VERSION;
+          const tarball = readFileSync(`${process.env.RUNNER_TEMP}/ai-appshots-${version}.tgz`);
+          const integrity = `sha512-${createHash('sha512').update(tarball).digest('base64')}`;
+          const response = await fetch('https://registry.npmjs.org/ai-appshots');
+          if (!response.ok) throw new Error(`Cannot verify npm publication: HTTP ${response.status}`);
+          const metadata = await response.json();
+          if (metadata['dist-tags'].latest !== version || metadata.versions[version]?.dist?.integrity !== integrity) {
+            throw new Error('Published version, latest tag, or artifact integrity does not match this release.');
+          }
+          console.log(`Verified ai-appshots@${version} and its artifact integrity.`);
+          JS
