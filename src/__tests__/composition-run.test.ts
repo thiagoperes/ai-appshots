@@ -70,6 +70,47 @@ test('browser and native captures use distinct screen preparation and reject mis
   await assert.rejects(composeComposition({ ...options, captures: { one: native }, includesStatusBar: false }), /Browser capture.*expected/);
 });
 
+test('browser edge rounding preserves captured pixels and still rejects larger mismatches', async () => {
+  const target: TargetSpec = {
+    ...DEFAULT_TARGETS[0]!, viewport: { width: 120, height: 240 }, deviceScaleFactor: 1,
+    statusBarHeight: 24, statusBarTextSize: 10, output: { width: 120, height: 240 },
+    frame: { kind: 'none' }, statusBar: { style: 'ios-tablet' },
+  };
+  const options = {
+    target, screens: ['one'], captions: {}, canvas: DEFAULT_THEME, theme: 'light' as const,
+    locale: 'en', frameCacheDir: tmpdir(), includesStatusBar: false,
+    composition: { preset: 'blank' as const, layers: [
+      { id: 'screen', kind: 'device' as const, screen: 'one', x: 0.5, y: 0.5, width: 1, height: 1 },
+    ] },
+  };
+  for (const [dx, dy] of [[-1, -1], [0, -1], [1, 1], [-1, 1], [1, -1], [-2, 0], [0, 2]]) {
+    const width = 120 + dx!, height = 216 + dy!;
+    const pixels = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const at = (y * width + x) * 3;
+        pixels[at] = x % 256; pixels[at + 1] = y % 256; pixels[at + 2] = (x + y) % 256;
+      }
+    }
+    const capture = await sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer();
+    const rendering = composeComposition({ ...options, captures: { one: capture } });
+    if (Math.abs(dx!) > 1 || Math.abs(dy!) > 1) {
+      await assert.rejects(rendering, /Browser capture.*expected/);
+      continue;
+    }
+    const expected = Buffer.alloc(120 * 216 * 3);
+    for (let y = 0; y < 216; y++) {
+      for (let x = 0; x < 120; x++) {
+        const source = (Math.min(y, height - 1) * width + Math.min(x, width - 1)) * 3;
+        pixels.copy(expected, (y * 120 + x) * 3, source, source + 3);
+      }
+    }
+    const { image } = await rendering;
+    assert.deepEqual(await sharp(image).extract({ left: 0, top: 24, width: 120, height: 216 })
+      .removeAlpha().raw().toBuffer(), expected, `Browser edge rounding ${dx},${dy}`);
+  }
+});
+
 test('partial panorama runs export both panels and preserve other delivery assets', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'appshots-composition-'));
   try {

@@ -82,10 +82,20 @@ async function buildScreen(
   const screen = captureSize(target);
   const strip = statusBarSize(target);
   const { width, height } = await sharp(capture).metadata();
+  const pageHeight = screen.height - strip.height;
   if (strip.height < 0 || strip.height >= screen.height) throw new Error(`Invalid status-bar height for "${target.id}".`);
-  if (width !== screen.width || height !== screen.height - strip.height) {
+  if (!width || !height || Math.abs(width - screen.width) > 1 || Math.abs(height - pageHeight) > 1) {
     throw new Error(`Browser capture for "${target.id}" is ${width}x${height}; expected ` +
-      `${screen.width}x${screen.height - strip.height} before adding the status bar. Check the viewport and device scale.`);
+      `${screen.width}x${pageHeight} before adding the status bar. Check the viewport and device scale.`);
+  }
+  if (width !== screen.width || height !== pageHeight) {
+    // Mobile browser scaling can round the screenshot edge by one pixel. Keep
+    // the captured pixels intact: crop an extra edge or repeat a missing one.
+    let page = sharp(capture).extract({ left: 0, top: 0,
+      width: Math.min(width, screen.width), height: Math.min(height, pageHeight) });
+    const right = Math.max(0, screen.width - width), bottom = Math.max(0, pageHeight - height);
+    if (right || bottom) page = page.extend({ right, bottom, extendWith: 'copy' });
+    capture = await page.png().toBuffer();
   }
   if (target.statusBarHeight <= 0) {
     return capture;
