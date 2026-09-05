@@ -114,7 +114,7 @@ test('caption spacing is customizable in both renderers and explicit layer place
     'title-1': { x: 0.1, y: 0.5, align: 'left' }, 'kicker-1': { hidden: true }, 'device-1': { hidden: true },
   } } });
   const title = await bounds(result.image, 0);
-  assert.equal(title.left, 30);
+  assert.ok(Math.abs(title.left - 30) <= 1, 'Explicit x must place the visible title within one antialiased edge pixel');
   assert.ok(Math.abs(title.top - 326) <= 1, 'Explicit y must place the visible title within one antialiased edge pixel');
   const noCaption = await renderComposition({ ...base, composition: { preset: 'classic', overrides: {
     'title-1': { hidden: true }, 'kicker-1': { hidden: true },
