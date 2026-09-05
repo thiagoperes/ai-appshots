@@ -75,7 +75,10 @@ export async function wrap(
   max: number,
 ): Promise<string[]> {
   if (text.includes('\n')) {
-    return text.split('\n').map((line) => line.trim());
+    // Keep every requested break, while allowing each paragraph to wrap again
+    // on a narrower device or in a side caption column.
+    return (await Promise.all(text.split('\n').map((line) =>
+      line.trim() ? wrap(line.trim(), style, max) : ['']))).flat();
   }
 
   const words = text.split(/\s+/).filter(Boolean);

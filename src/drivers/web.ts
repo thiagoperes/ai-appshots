@@ -215,6 +215,9 @@ async function captureScreen(
     });
     await settle(page, screen, config);
 
+    if (screen.scrollY !== undefined) {
+      await page.evaluate((y) => window.scrollTo(0, y), screen.scrollY);
+    }
     checkLanding(page, screen.path, config);
 
     return await page.screenshot({ type: 'png', animations: 'disabled' });

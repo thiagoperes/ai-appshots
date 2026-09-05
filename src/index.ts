@@ -9,12 +9,23 @@ export {
   STORE_POLICIES,
 } from './targets';
 export type { StorePolicy } from './targets';
+export { DEVICE_PROFILES, createDeviceTarget, formFactorFor } from './devices';
+export type { DeviceProfile, DeviceTargetOptions } from './devices';
 export { DEFAULT_THEME, MONO_STACK, SANS_STACK, resolveTheme } from './theme';
 export { renderCanvas } from './render/canvas';
 export type { CanvasOptions } from './render/canvas';
 export { measureLine, typesetLine } from './render/typeset';
 export type { TextStyle } from './render/typeset';
 export { composeScreenshot } from './compose';
+export { composeComposition } from './compose';
+export type { ComposeCompositionOptions } from './compose';
+export { renderComposition } from './render/composition';
+export type { CompositionOptions } from './render/composition';
+export { createPreset, compositionLayers } from './render/presets';
+export type { PresetContext } from './render/presets';
+export { renderGallery } from './render/gallery';
+export { mergeCompositions } from './composition-plan';
+export type * from './composition-types';
 export {
   captureSpecFor,
   createDriver,

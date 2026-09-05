@@ -2,22 +2,26 @@ import sharp from 'sharp';
 
 import {
   captureSize,
+  assertScreenAspect,
   loadFrameitFrame,
+  loadImageFrame,
   renderFramedDevice,
   statusBarSize,
 } from './frames';
 import { renderCssBezel } from './render/bezel';
+import { renderWindowFrame } from './render/window';
+import { formFactorFor } from './devices';
 import { renderCanvas } from './render/canvas';
+import { renderComposition } from './render/composition';
+import { compositionLayers } from './render/presets';
+import type { CompositionSpec, DeviceLayer } from './composition-types';
 import {
   foregroundFor,
   renderStatusBar,
   sampleTopColor,
 } from './render/status-bar';
 import { STORE_POLICIES } from './targets';
-import type { CanvasTheme, Caption, TargetSpec, ThemeName } from './types';
-
-/** Aspect ratios within this of each other are treated as the same screen. */
-const ASPECT_TOLERANCE = 0.02;
+import type { CanvasTheme, Caption, CaptionBundle, FrameSpec, TargetSpec, ThemeName } from './types';
 
 /**
  * Scales a native capture onto the exact pixel grid the bezel expects.
@@ -40,9 +44,9 @@ async function normalize(capture: Buffer, target: TargetSpec) {
     return capture;
   }
 
-  const drift = Math.abs(width / height - expected.width / expected.height);
-
-  if (drift > ASPECT_TOLERANCE) {
+  try {
+    assertScreenAspect({ width, height }, expected, `Capture for "${target.id}"`);
+  } catch {
     const statusBar = Math.round(
       target.statusBarHeight * target.deviceScaleFactor,
     );
@@ -75,11 +79,18 @@ async function buildScreen(
   capture: Buffer,
   font: string,
 ) {
+  const screen = captureSize(target);
+  const strip = statusBarSize(target);
+  const { width, height } = await sharp(capture).metadata();
+  if (strip.height < 0 || strip.height >= screen.height) throw new Error(`Invalid status-bar height for "${target.id}".`);
+  if (width !== screen.width || height !== screen.height - strip.height) {
+    throw new Error(`Browser capture for "${target.id}" is ${width}x${height}; expected ` +
+      `${screen.width}x${screen.height - strip.height} before adding the status bar. Check the viewport and device scale.`);
+  }
   if (target.statusBarHeight <= 0) {
     return capture;
   }
 
-  const strip = statusBarSize(target);
   const background = await sampleTopColor(capture);
   const statusBar = await renderStatusBar({
     size: strip,
@@ -87,9 +98,10 @@ async function buildScreen(
     platform: target.platform,
     glyph: Math.round(target.statusBarTextSize * target.deviceScaleFactor),
     font,
+    layout: target.statusBar ?? {
+      style: target.platform === 'android' ? 'android' : formFactorFor(target) === 'tablet' ? 'ios-tablet' : 'ios-phone',
+    },
   });
-
-  const screen = captureSize(target);
 
   return sharp({
     create: {
@@ -105,6 +117,70 @@ async function buildScreen(
     ])
     .png()
     .toBuffer();
+}
+
+async function frameScreen(screen: Buffer, target: TargetSpec, frame: FrameSpec, cacheDir: string, font: string, theme: ThemeName, assetRoot?: string) {
+  switch (frame.kind) {
+    case 'none': return screen;
+    case 'css': return renderCssBezel(screen, frame, Math.min(captureSize(target).width, captureSize(target).height));
+    case 'window': return renderWindowFrame(screen, { ...frame, appearance: frame.appearance ?? theme }, font);
+    case 'image': return renderFramedDevice(screen, await loadImageFrame(target, frame, assetRoot));
+    case 'frameit': return renderFramedDevice(screen, await loadFrameitFrame(target, frame, cacheDir));
+  }
+}
+
+export interface ComposeCompositionOptions {
+  readonly target: TargetSpec;
+  readonly captures: Readonly<Record<string, Buffer>>;
+  readonly screens: readonly string[];
+  readonly captions: CaptionBundle;
+  readonly composition: CompositionSpec;
+  readonly theme: ThemeName;
+  readonly canvas: CanvasTheme;
+  readonly locale: string;
+  readonly frameCacheDir: string;
+  readonly includesStatusBar: boolean;
+  readonly assetRoot?: string;
+}
+
+/** Prepares each capture/frame once, even when reused in several layers. */
+export async function composeComposition(options: ComposeCompositionOptions) {
+  const { target, canvas } = options;
+  const screens = new Map<string, Promise<Buffer>>();
+  const devices = new Map<string, Promise<Buffer>>();
+  const resolveDevice = async (layer: DeviceLayer) => {
+    const frame = layer.frame ?? target.frame;
+    if (layer.crop && frame.kind !== 'none') {
+      throw new Error(`Layer "${layer.id}" crops the screen; set its frame to kind "none".`);
+    }
+    let screen = screens.get(layer.screen);
+    if (!screen) {
+      const capture = options.captures[layer.screen];
+      if (!capture) throw new Error(`Missing capture for composition source "${layer.screen}".`);
+      screen = options.includesStatusBar
+        ? normalize(capture, target)
+        : buildScreen(target, capture, canvas.sansFont);
+      screens.set(layer.screen, screen);
+    }
+    const key = `${layer.screen}|${JSON.stringify(frame)}`;
+    let device = devices.get(key);
+    if (!device) {
+      device = screen.then((buffer) => frameScreen(buffer, target, frame, options.frameCacheDir, canvas.sansFont, options.theme, options.assetRoot));
+      devices.set(key, device);
+    }
+    return { image: await device, appleArtwork: frame.kind === 'frameit' && target.platform !== 'android' };
+  };
+  const context = { ...options, output: target.output, captionScale: target.captionScale, captionGapRatio: target.captionGapRatio,
+    formFactor: formFactorFor(target), deviceSize: captureSize(target) };
+  const deviceSizes: Record<string, { width: number; height: number }> = {};
+  // Measure the selected hardware, including frame overrides, before placing
+  // presets. A laptop's keyboard/base changes its shape substantially.
+  for (const layer of compositionLayers(options.composition, context)) {
+    if (layer.kind !== 'device' || layer.hidden || !/^device-\d+$/.test(layer.id)) continue;
+    const { width = 0, height = 0 } = await sharp((await resolveDevice(layer)).image).metadata();
+    deviceSizes[layer.id] = { width, height };
+  }
+  return renderComposition({ ...context, deviceSizes, resolveDevice });
 }
 
 /**
@@ -123,6 +199,7 @@ export async function composeScreenshot(options: {
   readonly canvas: CanvasTheme;
   /** Directory the downloaded device bezels are cached in. */
   readonly frameCacheDir: string;
+  readonly assetRoot?: string;
   /**
    * True when the capture is a full device screen, as a simulator, emulator or
    * imported screenshot produces. False for a browser capture, which has no
@@ -140,15 +217,7 @@ export async function composeScreenshot(options: {
     ? await normalize(capture, target)
     : await buildScreen(target, capture, canvas.sansFont);
 
-  const device =
-    frame.kind === 'none'
-      ? screen
-      : frame.kind === 'css'
-        ? await renderCssBezel(screen, frame, captureSize(target).width)
-        : await renderFramedDevice(
-            screen,
-            await loadFrameitFrame(target, frame, options.frameCacheDir),
-          );
+  const device = await frameScreen(screen, target, frame, options.frameCacheDir, canvas.sansFont, theme, options.assetRoot);
 
   return renderCanvas({
     output: target.output,

@@ -3,9 +3,10 @@ import type { OverlayOptions } from 'sharp';
 
 import { ellipseGradientToSvg, linearGradientToSvg, toPaint } from './color.ts';
 import { wrap } from './text.ts';
-import { typesetLine } from './typeset.ts';
+import { measureLine, typesetLine } from './typeset.ts';
 import type { TextStyle } from './typeset.ts';
 import type { CanvasTheme, Caption, Size, ThemeName } from '../types.ts';
+import { captionLayout } from './caption-layout.ts';
 
 /**
  * Lays out the marketing canvas: backdrop, caption, and the framed device.
@@ -32,62 +33,11 @@ export interface CanvasOptions {
   readonly index: number;
 }
 
-interface Layout {
-  readonly titleSize: number;
-  readonly kickerSize: number;
-  readonly topPadding: number;
-  readonly titleTop: number;
-  readonly titleLineHeight: number;
-  readonly titleBlockHeight: number;
-  readonly eyebrowHeight: number;
-  readonly captionHeight: number;
-  readonly stageTop: number;
-}
-
-function layoutFor(
-  options: CanvasOptions,
-  lines: readonly string[],
-  hasEyebrow: boolean,
-): Layout {
-  const { output } = options;
-  const titleSize = Math.round(output.width * options.captionScale);
-  const kickerSize = Math.max(14, Math.round(titleSize * 0.28));
-  const topPadding = Math.round(output.height * 0.05);
-  const titleLineHeight = titleSize * 1.04;
-  const eyebrowHeight = hasEyebrow
-    ? Math.round(kickerSize * 1.2) + Math.round(kickerSize * 1.25)
-    : 0;
-  // Always reserves two lines so the device sits at the same height on every
-  // screen in the set. Without it a one-line caption lets the device ride up and
-  // the frames jump as the user swipes. A three-line title still expands.
-  const titleBlockHeight = Math.max(
-    Math.round(titleLineHeight * 2),
-    Math.round(titleLineHeight * lines.length),
-  );
-  const titleTop = topPadding + eyebrowHeight;
-  const captionHeight =
-    titleTop +
-    titleBlockHeight +
-    Math.round(output.height * options.captionGapRatio);
-
-  return {
-    titleSize,
-    kickerSize,
-    topPadding,
-    titleTop,
-    titleLineHeight,
-    titleBlockHeight,
-    eyebrowHeight,
-    captionHeight,
-    stageTop: captionHeight,
-  };
-}
-
 /** Backdrop, technical grid, vignette, accent bloom and the eyebrow rules. */
 function backdropSvg(
   options: CanvasOptions,
-  layout: Layout,
-  eyebrow: { readonly width: number; readonly rule: number } | undefined,
+  layout: ReturnType<typeof captionLayout>,
+  eyebrow: { readonly width: number; readonly height: number; readonly rule: number } | undefined,
 ) {
   const { output, canvas, theme } = options;
   const palette = canvas[theme];
@@ -137,7 +87,7 @@ function backdropSvg(
     }),
   ];
 
-  const rules = eyebrow
+  const rules = eyebrow && canvas.showRules
     ? [-1, 1]
         .map((side) => {
           const gap = Math.round(layout.kickerSize * 0.9);
@@ -149,7 +99,7 @@ function backdropSvg(
 
           return (
             `<rect x="${x.toFixed(2)}" ` +
-            `y="${layout.topPadding + Math.round(layout.kickerSize * 1.2) / 2}" ` +
+            `y="${layout.kickerBottom - eyebrow.height / 2}" ` +
             `width="${eyebrow.rule}" height="1" ` +
             `fill="${rule.color}" fill-opacity="${rule.opacity}" />`
           );
@@ -165,7 +115,7 @@ function backdropSvg(
       `<rect width="${output.width}" height="${output.height}" fill="url(#grid)" mask="url(#gridFade)" />` +
       `<rect width="${output.width}" height="${output.height}" fill="url(#vignette)" />` +
       `<g opacity="${theme === 'dark' ? 0.42 : 0.2}">` +
-      `<rect y="${haloTop}" width="${output.width}" height="${haloHeight}" fill="url(#halo)" />` +
+      `<rect width="${output.width}" height="${output.height}" fill="url(#halo)" />` +
       `</g>${rules}</svg>`,
   );
 }
@@ -178,9 +128,12 @@ function backdropSvg(
  * `drop-shadow` would, which the browser renderer used to provide.
  */
 async function shadowFor(device: Buffer, size: Size, blur: number) {
-  const alpha = await sharp(device)
+  const mask = await sharp(device)
     .ensureAlpha()
     .extractChannel('alpha')
+    .png()
+    .toBuffer();
+  const alpha = await sharp(mask)
     .blur(Math.max(blur / 2, 0.3))
     .linear(0.55, 0)
     .toBuffer();
@@ -202,32 +155,58 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   const { output, canvas, caption, theme } = options;
   const palette = canvas[theme];
 
-  const probe = layoutFor(options, ['', ''], Boolean(caption.kicker));
-  const titleStyle: TextStyle = {
+  const ratio = (value: number, name: string, min = 0.01, max = 1) => {
+    if (!Number.isFinite(value) || value < min || value > max) {
+      throw new Error(`${name} must be between ${min} and ${max}.`);
+    }
+    return value;
+  };
+  const maxLines = canvas.titleLines ?? 2;
+  if (!Number.isInteger(maxLines) || maxLines < 1 || maxLines > 4) {
+    throw new Error('titleLines must be an integer between 1 and 4.');
+  }
+  const maxWidth = Math.round(output.width * ratio(canvas.titleWidthRatio ?? 0.8, 'titleWidthRatio'));
+  const minScale = ratio(canvas.titleMinScale ?? 0.72, 'titleMinScale');
+  ratio(canvas.deviceWidthRatio ?? 0.88, 'deviceWidthRatio');
+  if (!caption.title.trim()) throw new Error('Caption title must not be empty.');
+  const probe = captionLayout(options);
+  const baseTitleStyle: TextStyle = {
     family: canvas.titleFont ?? canvas.sansFont,
+    fontFile: canvas.titleFontFile,
     size: probe.titleSize,
     weight: 700,
     letterSpacing: probe.titleSize * -0.032,
     colour: palette.title,
   };
 
-  const lines = await wrap(
-    caption.title,
-    titleStyle,
-    Math.round(output.width * 0.94),
-  );
+  let title: Awaited<ReturnType<typeof typesetLine>> | undefined;
+  let titleSize = probe.titleSize;
+  for (let size = probe.titleSize; size >= Math.ceil(probe.titleSize * minScale); size -= 1) {
+    const titleStyle = { ...baseTitleStyle, size, letterSpacing: size * -0.025 };
+    const lines = await wrap(caption.title, titleStyle, maxWidth);
+    if (lines.length > maxLines) continue;
+    const widths = await Promise.all(lines.map((line) => measureLine(line, titleStyle)));
+    if (widths.some((width) => width > maxWidth)) continue;
+    // Shape the whole paragraph: Pango preserves baselines across all lines.
+    const candidate = await typesetLine(lines.join('\n'), titleStyle);
+    if (candidate.height <= probe.titleBlockHeight && candidate.width <= maxWidth) {
+      title = candidate;
+      titleSize = size;
+      break;
+    }
+  }
+  if (!title) throw new Error(`Caption does not fit ${maxLines} lines: "${caption.title}". Shorten it or increase titleLines.`);
 
   const index = canvas.showIndex
     ? `[ ${String(options.index).padStart(2, '0')} ]`
     : '';
   const label = [index, caption.kicker ?? ''].filter(Boolean).join('\u00a0\u00a0');
-  const layout = layoutFor(options, lines, Boolean(label));
-
   const kickerStyle: TextStyle = {
     family: canvas.kickerFont ?? canvas.monoFont,
-    size: layout.kickerSize,
-    weight: 500,
-    letterSpacing: layout.kickerSize * 0.22,
+    fontFile: canvas.kickerFontFile,
+    size: probe.kickerSize,
+    weight: 600,
+    letterSpacing: probe.kickerSize * 0.02,
     colour: palette.kicker,
   };
 
@@ -235,11 +214,15 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
     ? await typesetLine(label.toUpperCase(), kickerStyle)
     : undefined;
 
+  if (kicker && (kicker.width > maxWidth || kicker.height > probe.kickerHeight)) {
+    throw new Error(`Kicker exceeds the caption safe area: "${label}".`);
+  }
+  const layout = captionLayout(options, { titleHeight: title.height, kickerHeight: kicker?.height ?? 0, titleSize });
   const backdrop = backdropSvg(
     options,
     layout,
     kicker
-      ? { width: kicker.width, rule: Math.round(layout.kickerSize * 2.4) }
+      ? { width: kicker.width, height: kicker.height, rule: Math.round(layout.kickerSize * 2.4) }
       : undefined,
   );
 
@@ -249,37 +232,26 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
     overlays.push({
       input: kicker.buffer,
       left: Math.round((output.width - kicker.width) / 2),
-      top:
-        layout.topPadding +
-        Math.round((Math.round(layout.kickerSize * 1.2) - kicker.height) / 2),
+      top: layout.kickerBottom - kicker.height,
     });
   }
 
-  const rendered = await Promise.all(
-    lines.map((line) => typesetLine(line, titleStyle)),
-  );
-  const blockCentre = layout.titleTop + layout.titleBlockHeight / 2;
-  const textHeight = lines.length * layout.titleLineHeight;
-
-  rendered.forEach((line, position) => {
-    const lineTop =
-      blockCentre - textHeight / 2 + position * layout.titleLineHeight;
-
-    overlays.push({
-      input: line.buffer,
-      left: Math.round((output.width - line.width) / 2),
-      top: Math.round(lineTop + (layout.titleLineHeight - line.height) / 2),
-    });
+  overlays.push({
+    input: title.buffer,
+    left: Math.round((output.width - title.width) / 2),
+    top: layout.titleTop,
   });
 
+  const bleed = options.allowBleed && (canvas.deviceBleed ?? false);
   const stageHeight =
     output.height -
     layout.stageTop -
-    (options.allowBleed ? 0 : Math.round(output.height * 0.042));
+    (bleed ? 0 : layout.bottomPadding);
+  if (stageHeight <= 0) throw new Error('Caption leaves no space for the device.');
   const source = await sharp(options.device).metadata();
   const scale = Math.min(
-    (output.width * 0.88) / (source.width ?? 1),
-    (stageHeight * (options.allowBleed ? 1.16 : 1)) / (source.height ?? 1),
+    (output.width * (canvas.deviceWidthRatio ?? 0.88)) / (source.width ?? 1),
+    (stageHeight * (bleed ? 1.16 : 1)) / (source.height ?? 1),
   );
   const width = Math.round((source.width ?? 1) * scale);
   const height = Math.round((source.height ?? 1) * scale);
@@ -287,7 +259,7 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   // A bleed target wants the device running off the bottom edge. When its aspect
   // ratio makes it width-limited it can come up short of that, so it is anchored
   // to the bottom rather than left floating with a band of backdrop beneath it.
-  const top = options.allowBleed
+  const top = bleed
     ? Math.max(layout.stageTop, output.height - height)
     : layout.stageTop;
   // sharp will not composite past the canvas, so any overflow is trimmed here.

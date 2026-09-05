@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { access } from 'node:fs/promises';
 
 import { escapeXml, toPaint } from './color.ts';
 
@@ -29,12 +30,16 @@ export interface TextStyle {
    * one installed, so the same value works here and in a browser.
    */
   readonly family: string;
+  readonly fontFile?: string;
   /** Em size in pixels. Rendering is at 72dpi, so a pixel is a point. */
   readonly size: number;
   readonly weight: number;
   /** Extra space between characters, in pixels. Negative tightens. */
   readonly letterSpacing: number;
   readonly colour?: string;
+  readonly align?: 'left' | 'center' | 'right';
+  /** Additional line spacing in pixels, handled by Pango's paragraph layout. */
+  readonly lineSpacing?: number;
 }
 
 function description({ family, size, weight }: TextStyle) {
@@ -54,7 +59,8 @@ function markup(text: string, style: TextStyle) {
   // Pango measures letter spacing in 1024ths of a point.
   const spacing = Math.round(style.letterSpacing * 1024);
   const attributes = [
-    style.colour ? `foreground="${toPaint(style.colour).color}"` : '',
+    style.colour ? `foreground="${escapeXml(toPaint(style.colour).color)}"` : '',
+    style.colour ? `alpha="${Math.round(toPaint(style.colour).opacity * 65535)}"` : '',
     spacing === 0 ? '' : `letter_spacing="${spacing}"`,
   ]
     .filter(Boolean)
@@ -75,8 +81,14 @@ export async function typesetLine(
   text: string,
   style: TextStyle,
 ): Promise<TypesetLine> {
+  if (style.fontFile) await access(style.fontFile);
   const { data, info } = await sharp({
-    text: { text: markup(text, style), font: description(style), rgba: true, dpi: 72 },
+    text: {
+      text: markup(text, style), font: description(style), fontfile: style.fontFile,
+      rgba: true, dpi: 72,
+      align: style.align === 'left' || style.align === 'right' ? style.align : 'centre',
+      spacing: style.lineSpacing ?? 0,
+    },
   })
     .png()
     .toBuffer({ resolveWithObject: true });
@@ -104,7 +116,7 @@ export function measureLine(text: string, style: TextStyle): Promise<number> {
     return Promise.resolve(0);
   }
 
-  const key = `${style.family}|${style.size}|${style.weight}|${style.letterSpacing}|${text}`;
+  const key = `${style.family}|${style.fontFile ?? ""}|${style.size}|${style.weight}|${style.letterSpacing}|${text}`;
   const cached = widths.get(key);
 
   if (cached) {

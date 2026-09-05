@@ -1,6 +1,10 @@
 import type { StoreId, TargetSpec } from './types';
+import { createDeviceTarget, DEVICE_PROFILES } from './devices.ts';
 
 /**
+ * Conservative defaults for the legacy framed layout. Apple's artwork guidance
+ * is separate from App Store screenshot file requirements. The composition
+ * renderer reports artwork notices separately and supports generic frames.
  * Apple's Marketing Resources and Identity Guidelines require product bezels to
  * be shown "as is": no cropping, tilting, shadows or reflections, and
  * promotional copy beside the device rather than on top of it. Play has no
@@ -35,106 +39,23 @@ export const STORE_POLICIES: Readonly<Record<StoreId, StorePolicy>> = {
  * @see https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications
  * @see https://support.google.com/googleplay/android-developer/answer/9866151
  */
-export const MACOS_TARGET: TargetSpec = {
-  id: 'macos-16:10',
-  store: 'app-store',
-  platform: 'macos',
-  viewport: { width: 1440, height: 900 },
-  deviceScaleFactor: 2,
-  output: { width: 2880, height: 1800 },
-  frame: { kind: 'none' },
-  captionScale: 0.032,
-  captionGapRatio: 0.035,
-  statusBarHeight: 0,
-  statusBarTextSize: 0,
-  deliveryKind: 'macos',
-};
+export const MACOS_TARGET: TargetSpec = createDeviceTarget('mac-window', {
+  id: 'macos-16:10', frame: { kind: 'window' },
+});
 
 export const DEFAULT_TARGETS: readonly TargetSpec[] = [
-  {
-    id: 'ios-iphone-6.9',
-    store: 'app-store',
-    platform: 'ios',
-    viewport: { width: 440, height: 956 },
-    deviceScaleFactor: 3,
-    output: { width: 1320, height: 2868 },
-    frame: {
-      kind: 'frameit',
-      file: 'Apple iPhone 17 Pro Max Deep Blue.png',
-      offsetKey: 'iPhone 17 Pro Max',
-    },
-    captionScale: 0.078,
-    captionGapRatio: 0.042,
-    // Matches the safe-area top inset on a Dynamic Island iPhone, so the clock
-    // and indicators land either side of the island cut into the bezel.
-    statusBarHeight: 59,
-    statusBarTextSize: 17,
-    deliveryKind: 'ios',
-  },
-  {
-    id: 'ios-ipad-13',
-    store: 'app-store',
-    platform: 'ios',
-    viewport: { width: 1024, height: 1366 },
-    deviceScaleFactor: 2,
-    output: { width: 2064, height: 2752 },
-    frame: {
-      kind: 'frameit',
-      file: 'Apple iPad Pro (12.9-inch) (4th generation) Space Gray.png',
-      offsetKey: 'iPad Pro (12.9 inch) (4th generation)',
-    },
-    captionScale: 0.05,
-    captionGapRatio: 0.05,
-    statusBarHeight: 24,
-    statusBarTextSize: 13,
-    deliveryKind: 'ios',
-  },
-  {
-    id: 'android-phone',
-    store: 'play-store',
-    platform: 'android',
-    viewport: { width: 360, height: 780 },
-    deviceScaleFactor: 3,
-    output: { width: 1080, height: 1920 },
-    frame: {
-      kind: 'frameit',
-      file: 'Google Pixel 5 Just Black.png',
-      offsetKey: 'Google Pixel 5',
-    },
-    captionScale: 0.078,
-    captionGapRatio: 0.042,
-    statusBarHeight: 24,
-    statusBarTextSize: 14,
-    deliveryKind: 'phone',
-  },
-  {
-    // frameit's only Android tablet bezels are a 2014 Nexus 9 and a Chrome OS
-    // Pixel Slate, both of which look dated next to current hardware. A neutral
-    // CSS bezel ages better; swap in a frameit frame here if that changes.
-    id: 'android-tablet',
-    store: 'play-store',
-    platform: 'android',
-    viewport: { width: 840, height: 1220 },
-    deviceScaleFactor: 2,
-    output: { width: 1440, height: 2560 },
-    frame: {
-      kind: 'css',
-      bezelRatio: 0.022,
-      radiusRatio: 0.035,
-      color: '#1c1c1e',
-    },
-    captionScale: 0.055,
-    captionGapRatio: 0.05,
-    statusBarHeight: 24,
-    statusBarTextSize: 14,
-    deliveryKind: 'tablet',
-  },
+  createDeviceTarget('iphone-17-pro-max', { id: 'ios-iphone-6.9' }),
+  createDeviceTarget('ipad-pro-12.9', { id: 'ios-ipad-13' }),
+  createDeviceTarget('pixel-5', { id: 'android-phone' }),
+  createDeviceTarget('android-tablet'),
 ];
 
 /** All targets available through `findTarget`; macOS remains opt-in. */
 export const BUILT_IN_TARGETS: readonly TargetSpec[] = [
   ...DEFAULT_TARGETS,
   MACOS_TARGET,
+  ...DEVICE_PROFILES.filter((device) => !DEFAULT_TARGETS.some((target) => target.id === device.id))
+    .map((device) => createDeviceTarget(device.id)),
 ];
 
 export function findTarget(

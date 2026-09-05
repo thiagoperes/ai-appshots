@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from 'playwright';
+import type { CompositionSpec, PanoramaSpec } from './composition-types';
 
 export type StoreId = 'app-store' | 'play-store';
 
@@ -7,6 +8,17 @@ export type BrowserEngine = 'webkit' | 'chromium';
 export type ThemeName = 'light' | 'dark';
 
 export type Platform = 'ios' | 'android' | 'macos';
+export type FormFactor = 'phone' | 'tablet' | 'desktop';
+export type Orientation = 'portrait' | 'landscape';
+
+export interface StatusBarLayout {
+  readonly style: 'ios-phone' | 'ios-tablet' | 'android';
+  /** Fractions of screen width; allow space for the selected camera cutout. */
+  readonly leading?: number;
+  readonly trailing?: number;
+  /** Fraction of strip height to reserve above the glyphs. */
+  readonly topInset?: number;
+}
 
 /** @deprecated Use {@link Platform}. */
 export type StatusBarPlatform = Platform;
@@ -32,6 +44,27 @@ export interface FrameitFrame {
    * generation)`.
    */
   readonly offsetKey: string;
+  /** Native cutout size, before rotating the hardware. */
+  readonly screenSize?: Size;
+  /** Rotates the hardware; the app capture remains upright. */
+  readonly rotation?: 0 | 90 | 180 | 270;
+}
+
+/** User-supplied transparent PNG bezel, with an explicit screen cutout. */
+export interface ImageFrame {
+  readonly kind: 'image';
+  readonly path: string;
+  readonly screen: Size & { readonly x: number; readonly y: number };
+  readonly rotation?: 0 | 90 | 180 | 270;
+}
+
+export interface WindowFrame {
+  readonly kind: 'window';
+  readonly appearance?: ThemeName;
+  readonly title?: string;
+  readonly color?: string;
+  readonly titleBarRatio?: number;
+  readonly radiusRatio?: number;
 }
 
 /** A neutral bezel drawn in CSS, for devices with no usable frameit asset. */
@@ -44,27 +77,32 @@ export interface CssFrame {
   readonly color: string;
 }
 
-/** Leaves desktop captures unframed. */
+/** Leaves captures unframed. */
 export interface NoFrame {
   readonly kind: 'none';
 }
 
-export type FrameSpec = FrameitFrame | CssFrame | NoFrame;
+export type FrameSpec = FrameitFrame | CssFrame | ImageFrame | WindowFrame | NoFrame;
 
 export interface TargetSpec {
   readonly id: string;
   readonly store: StoreId;
   readonly platform: Platform;
+  readonly formFactor?: FormFactor;
+  readonly statusBar?: StatusBarLayout;
   /**
    * Where captures for this target come from. Falls back to the config's
    * `capture` setting, and finally to a headless browser.
    */
   readonly capture?: CaptureSpec;
+  /** Composition defaults for this device size. */
+  readonly composition?: CompositionSpec;
   /**
    * Logical size of the device screen, in points. Multiplied by
-   * `deviceScaleFactor` this must equal the pixel size the frame expects, which
-   * the frame loader asserts at runtime. The same arithmetic describes a native
-   * device: an iPhone 17 Pro Max is 440x956pt at 3x, or 1320x2868px.
+   * `deviceScaleFactor` this gives the full capture size. Its aspect ratio must
+   * match the selected frame; matching captures at another resolution are
+   * resampled onto the native cutout. An iPhone 17 Pro Max is 440x956pt at 3x,
+   * or 1320x2868px.
    */
   readonly viewport: Size;
   readonly deviceScaleFactor: number;
@@ -112,6 +150,12 @@ export interface ScreenSpec {
    */
   readonly deepLink?: string;
   readonly theme: ThemeName;
+  /** Canvas overrides for this screen. */
+  readonly canvas?: CanvasThemeOverrides;
+  /** Overrides the default composition for this screen. */
+  readonly composition?: CompositionSpec;
+  /** Browser scroll position after the page has settled. */
+  readonly scrollY?: number;
   /** Targets to skip, for screens that only make sense on one form factor. */
   readonly excludeTargets?: readonly string[];
   /**
@@ -129,6 +173,7 @@ export interface ScreenSpec {
 export interface Caption {
   readonly kicker?: string;
   readonly title: string;
+  readonly subtitle?: string;
 }
 
 export type CaptionBundle = Readonly<Record<string, Caption>>;
@@ -136,6 +181,8 @@ export type CaptionBundle = Readonly<Record<string, Caption>>;
 export interface FrameAsset {
   /** Absolute path to the cached bezel PNG. */
   readonly path: string;
+  /** Rotated hardware pixels, when different from the source file. */
+  readonly image?: Buffer;
   readonly size: Size;
   /** Top-left corner of the transparent screen area within the bezel. */
   readonly screenOffset: { readonly x: number; readonly y: number };
@@ -165,6 +212,24 @@ export interface CanvasPalette {
 }
 
 export interface CanvasTheme {
+  /** Maximum headline lines. Captions are measured before device placement. */
+  readonly titleLines?: number;
+  readonly titleWidthRatio?: number;
+  readonly titleMinScale?: number;
+  /** Top inset for captions above the device, relative to the shorter canvas edge. Defaults to 0.1. */
+  readonly captionTopRatio?: number;
+  /** Clear space from kicker ink to headline ink, in title ems. Defaults to 0.35. */
+  readonly kickerGapEm?: number;
+  /** Absolute path to a font file; use titleFont to select its family. */
+  readonly titleFontFile?: string;
+  /** Absolute path to a font file; use kickerFont to select its family. */
+  readonly kickerFontFile?: string;
+  readonly deviceWidthRatio?: number;
+  /** Bottom inset relative to canvas height. Defaults to 10% of the shorter edge. */
+  readonly bottomMarginRatio?: number;
+  /** Cropping is opt-in and only applied when the target permits it. */
+  readonly deviceBleed?: boolean;
+  readonly showRules?: boolean;
   readonly dark: CanvasPalette;
   readonly light: CanvasPalette;
   /** Title face. Falls back to `sansFont` for backwards compatibility. */
@@ -176,6 +241,12 @@ export interface CanvasTheme {
   /** Renders the `[ 01 ]` index before the kicker. */
   readonly showIndex: boolean;
 }
+
+/** Individual palette colours can be overridden without repeating the palette. */
+export type CanvasThemeOverrides = Omit<Partial<CanvasTheme>, 'dark' | 'light'> & {
+  readonly dark?: Partial<CanvasPalette>;
+  readonly light?: Partial<CanvasPalette>;
+};
 
 /** Captures a running browser at the target's viewport. */
 export interface WebCapture {
@@ -361,7 +432,12 @@ export interface AiAppshotsConfig {
   readonly screens: readonly ScreenSpec[];
   /** Captions keyed by locale, then by screen id. */
   readonly captions: Readonly<Record<string, CaptionBundle>>;
-  readonly theme?: Partial<CanvasTheme>;
+  readonly theme?: CanvasThemeOverrides;
+  /** Default composition. Omit to retain the original centred layout. */
+  readonly composition?: CompositionSpec;
+  readonly panoramas?: readonly PanoramaSpec[];
+  /** Write gallery previews beside framed/, never into delivery directories. */
+  readonly preview?: boolean | { readonly width?: number; readonly gap?: number };
   /** Selectors hidden on every screen. Default hides the Next.js dev overlay. */
   readonly hide?: readonly string[];
   /** Maps caption locales to store locale directories. Default `en` → `en-US`. */

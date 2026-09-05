@@ -1,8 +1,8 @@
 import sharp from 'sharp';
 
-import { toPaint } from './color';
-import { typesetLine } from './typeset';
-import type { Platform, Size } from '../types';
+import { toPaint } from './color.ts';
+import { typesetLine } from './typeset.ts';
+import type { Platform, Size, StatusBarLayout } from '../types';
 
 /**
  * Apple has shown 9:41 in iPhone marketing since the original keynote, and a
@@ -93,10 +93,25 @@ function icons(glyph: number, colour: string) {
   };
 }
 
+/** Android uses filled signal/wifi shapes and a vertical battery. */
+function androidIcons(glyph: number, colour: string) {
+  const scale = glyph / 14;
+  return {
+    width: 48 * scale,
+    markup: `<g transform="scale(${scale})" fill="${colour}">` +
+      '<path d="M0 12L12 0V12Z"/>' +
+      '<path d="M16 3Q24 -3 32 3L24 12Z"/>' +
+      '<rect x="38" y="2" width="8" height="11" rx="1"/>' +
+      '<rect x="40" y="0" width="4" height="2"/>' +
+      '</g>',
+  };
+}
+
 export interface StatusBarOptions {
   readonly size: Size;
   readonly style: StatusBarStyle;
   readonly platform: Platform;
+  readonly layout?: StatusBarLayout;
   /** Clock size in pixels, already multiplied by the device scale factor. */
   readonly glyph: number;
   readonly font: string;
@@ -114,7 +129,7 @@ const cache = new Map<string, Promise<Buffer>>();
 export function renderStatusBar(options: StatusBarOptions): Promise<Buffer> {
   const { size, style, platform, glyph } = options;
   const { r, g, b } = style.background;
-  const key = `${platform}|${size.width}x${size.height}|${glyph}|${r},${g},${b}|${options.font}`;
+  const key = JSON.stringify(options);
   const cached = cache.get(key);
 
   if (cached) {
@@ -122,24 +137,32 @@ export function renderStatusBar(options: StatusBarOptions): Promise<Buffer> {
   }
 
   const pending = (async () => {
-    // iOS clears the curved top edge and sits either side of the Dynamic Island.
-    // The Pixel bezel puts a hole-punch camera in the top left, so the Android
-    // clock starts to the right of it rather than underneath it.
-    const leading = Math.round(size.width * (platform === 'ios' ? 0.083 : 0.185));
-    const trailing = Math.round(size.width * (platform === 'ios' ? 0.083 : 0.05));
-    const nudge = platform === 'ios' ? size.height * 0.16 : 0;
+    const layout = options.layout ?? { style: platform === 'android' ? 'android' : 'ios-phone' };
+    const phone = layout.style === 'ios-phone';
+    const tablet = layout.style === 'ios-tablet';
+    const leadingRatio = layout.leading ?? (phone ? 0.083 : tablet ? 0.025 : 0.05);
+    const trailingRatio = layout.trailing ?? (phone ? 0.083 : tablet ? 0.025 : 0.05);
+    const topInset = layout.topInset ?? (phone ? 0.16 : 0);
+    for (const value of [leadingRatio, trailingRatio, topInset]) {
+      if (!Number.isFinite(value) || value < 0 || value > 0.4) throw new Error('Status-bar insets must be between 0 and 0.4.');
+    }
+    if (glyph <= 0 || !Number.isFinite(glyph) || glyph > size.height * 0.8) throw new Error('Status-bar glyphs must fit within the strip height.');
+    const leading = Math.round(size.width * leadingRatio);
+    const trailing = Math.round(size.width * trailingRatio);
+    const nudge = size.height * topInset;
     const colour = toPaint(style.foreground).color;
 
     const clock = await typesetLine(MARKETING_TIME, {
       family: options.font,
       size: glyph,
-      weight: 600,
-      letterSpacing: platform === 'ios' ? glyph * -0.01 : 0,
+      weight: phone ? 600 : 500,
+      letterSpacing: phone ? glyph * -0.01 : 0,
       colour: style.foreground,
     });
 
-    const glyphs = icons(glyph, colour);
+    const glyphs = layout.style === 'android' ? androidIcons(glyph, colour) : icons(glyph, colour);
     const centre = nudge + (size.height - nudge) / 2;
+    if (leading + clock.width + glyph > size.width - trailing - glyphs.width) throw new Error('Status-bar clock and indicators overlap; reduce the glyph size or insets.');
 
     const overlay = Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" ` +
@@ -166,8 +189,9 @@ export function renderStatusBar(options: StatusBarOptions): Promise<Buffer> {
       ])
       .png()
       .toBuffer();
-  })();
+  })().catch((error) => { cache.delete(key); throw error; });
 
+  if (cache.size >= 32) cache.delete(cache.keys().next().value!);
   cache.set(key, pending);
 
   return pending;

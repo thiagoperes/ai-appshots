@@ -8,6 +8,7 @@ import { DEFAULT_STORE_LOCALES } from './deliver';
 import { fail } from './log';
 import { resolvePaths } from './paths';
 import { DEFAULT_TARGETS, findTarget } from './targets';
+import { DEVICE_PROFILES } from './devices';
 import { resolveTheme } from './theme';
 import type { ResolvedConfig, ScreenSpec, AiAppshotsConfig } from './types';
 
@@ -123,6 +124,7 @@ export const USAGE = `Usage: ai-appshots [options]
   --skip-capture     Recompose from the existing raw captures.
   --skip-compose     Capture only.
   --fresh-auth       Ignore the cached session and sign in again.
+  --list-devices     List device profiles, frame colors and capture sizes.
   --help             Show this message.`;
 
 function collect(args: readonly string[], flag: string) {
@@ -153,6 +155,14 @@ export async function parseOptions(
 ): Promise<RunOptions> {
   if (argv.includes('--help') || argv.includes('-h')) {
     console.log(USAGE);
+    process.exit(0);
+  }
+
+  if (argv.includes('--list-devices')) {
+    console.log(DEVICE_PROFILES.map((device) => {
+      const size = `${Math.round(device.viewport.width * device.scale)}×${Math.round(device.viewport.height * device.scale)}`;
+      return `${device.id}  ·  ${device.name}  ·  ${device.platform}/${device.formFactor}  ·  ${size}\n  Frames: ${Object.keys(device.frames).join(', ')}`;
+    }).join('\n\n'));
     process.exit(0);
   }
 

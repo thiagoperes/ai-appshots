@@ -1,4 +1,4 @@
-import type { CanvasTheme } from './types';
+import type { CanvasTheme, CanvasThemeOverrides } from './types';
 
 export const MONO_STACK =
   'ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", ' +
@@ -17,7 +17,7 @@ export const DEFAULT_THEME: CanvasTheme = {
     base: '#000000',
     sweep: 'linear-gradient(176deg, #14162e 0%, #08091a 44%, #000000 100%)',
     halo: '#3b5bdb',
-    grid: 'rgba(255, 255, 255, 0.07)',
+    grid: 'rgba(255, 255, 255, 0)',
     title: '#ffffff',
     kicker: '#a5b4fc',
     rule: 'rgba(255, 255, 255, 0.22)',
@@ -26,21 +26,27 @@ export const DEFAULT_THEME: CanvasTheme = {
     base: '#eef1f7',
     sweep: 'linear-gradient(176deg, #ffffff 0%, #eef1f7 58%, #dbe3f2 100%)',
     halo: '#3b5bdb',
-    grid: 'rgba(15, 23, 42, 0.07)',
+    grid: 'rgba(15, 23, 42, 0)',
     title: '#0b1020',
     kicker: '#3b5bdb',
     rule: 'rgba(15, 23, 42, 0.22)',
   },
   monoFont: MONO_STACK,
   sansFont: SANS_STACK,
-  showIndex: true,
+  showIndex: false,
+  showRules: false,
+  titleLines: 2,
+  titleWidthRatio: 0.8,
+  titleMinScale: 0.72,
+  deviceWidthRatio: 0.88,
+  deviceBleed: false,
 };
 
-export function resolveTheme(overrides?: Partial<CanvasTheme>): CanvasTheme {
+export function resolveTheme(overrides?: CanvasThemeOverrides, base: CanvasTheme = DEFAULT_THEME): CanvasTheme {
   return {
-    ...DEFAULT_THEME,
+    ...base,
     ...overrides,
-    dark: { ...DEFAULT_THEME.dark, ...overrides?.dark },
-    light: { ...DEFAULT_THEME.light, ...overrides?.light },
+    dark: { ...base.dark, ...overrides?.dark },
+    light: { ...base.light, ...overrides?.light },
   };
 }
