@@ -11,7 +11,7 @@ import type { CanvasTheme, CaptionBundle, FormFactor, Size, ThemeName } from '..
 import { escapeXml, linearGradientToSvg, toPaint } from './color.ts';
 import { compositionLayers } from './presets.ts';
 import { wrap } from './text.ts';
-import { measureLine, typesetLine } from './typeset.ts';
+import { measureLine, typesetCaption } from './typeset.ts';
 import type { TextStyle } from './typeset.ts';
 
 export interface CompositionOptions {
@@ -146,7 +146,7 @@ async function fitText(layer: TextLayer, options: CompositionOptions) {
     const style: TextStyle = {
       family: layer.font ?? options.canvas.titleFont ?? options.canvas.sansFont,
       fontFile: layer.fontFile ? resolve(options.assetRoot ?? '.', layer.fontFile) : undefined,
-      size: current, weight: layer.weight ?? 700,
+      size: current, weight: layer.weight ?? options.canvas.titleWeight ?? 700,
       letterSpacing: current * (layer.letterSpacing ?? -0.025),
       colour: layer.color ?? options.canvas[options.theme].title,
       align: layer.align ?? 'left', lineSpacing: current * (layer.lineSpacing ?? 0),
@@ -154,7 +154,7 @@ async function fitText(layer: TextLayer, options: CompositionOptions) {
     const lines = await wrap(text, style, width);
     if (lines.length > (layer.maxLines ?? 3)) continue;
     if ((await Promise.all(lines.map((line) => measureLine(line, style)))).some((w) => w > width)) continue;
-    const result = await typesetLine(lines.join('\n'), style);
+    const result = await typesetCaption(lines.join('\n'), style);
     if (result.width > width || result.height > height) continue;
     return { ...result, fontSize: current };
   }

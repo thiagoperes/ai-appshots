@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import type { OverlayOptions } from 'sharp';
 
 import { escapeXml, toPaint } from './color.ts';
 import { typesetLine } from './typeset.ts';
@@ -26,7 +27,7 @@ export async function renderWindowFrame(capture: Buffer, frame: WindowFrame, fon
   const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}">` +
     `<rect width="${width}" height="${totalHeight}" rx="${radius}" fill="${escapeXml(paint.color)}" fill-opacity="${paint.opacity}"/>` +
     controls + `<path d="M0 ${bar - 0.5}H${width}" stroke="${dark ? '#ffffff' : '#000000'}" stroke-opacity="0.12"/></svg>`);
-  const overlays: sharp.OverlayOptions[] = [{ input: capture, left: 0, top: bar }];
+  const overlays: OverlayOptions[] = [{ input: capture, left: 0, top: bar }];
   if (frame.title?.trim()) {
     const title = await typesetLine(frame.title, {
       family: font, size: Math.max(1, Math.round(bar * 0.32)), weight: 500,

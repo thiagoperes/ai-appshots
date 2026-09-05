@@ -220,9 +220,7 @@ export interface CanvasTheme {
   readonly captionTopRatio?: number;
   /** Clear space from kicker ink to headline ink, in title ems. Defaults to 0.35. */
   readonly kickerGapEm?: number;
-  /** Absolute path to a font file; use titleFont to select its family. */
-  readonly titleFontFile?: string;
-  /** Absolute path to a font file; use kickerFont to select its family. */
+  /** Font file used directly for kicker glyphs, independent of installed families. */
   readonly kickerFontFile?: string;
   readonly deviceWidthRatio?: number;
   /** Bottom inset relative to canvas height. Defaults to 10% of the shorter edge. */
@@ -234,6 +232,13 @@ export interface CanvasTheme {
   readonly light: CanvasPalette;
   /** Title face. Falls back to `sansFont` for backwards compatibility. */
   readonly titleFont?: string;
+  /**
+   * Absolute path to the title font file. When set, the renderer reads the
+   * glyphs directly so local font installation cannot change the output.
+   */
+  readonly titleFontFile?: string;
+  /** Title weight. Defaults to 700. */
+  readonly titleWeight?: number;
   /** Kicker face. Falls back to `monoFont` for backwards compatibility. */
   readonly kickerFont?: string;
   readonly monoFont: string;

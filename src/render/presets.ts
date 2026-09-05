@@ -69,7 +69,7 @@ export function createPreset(preset: LayoutPreset, context: PresetContext): Comp
       anchor: { x: 0, y: 0 }, align: 'center', verticalAlign: 'top',
       font: canvas.titleFont ?? canvas.sansFont, fontFile: canvas.titleFontFile,
       fontSize: titleSize, minFontSize: titleSize * (canvas.titleMinScale ?? 0.72),
-      weight: 700, letterSpacing: -0.025, maxLines: canvas.titleLines ?? 2, color: palette.title, zIndex: 10,
+      weight: canvas.titleWeight ?? 700, letterSpacing: -0.025, maxLines: canvas.titleLines ?? 2, color: palette.title, zIndex: 10,
     };
     const kicker: TextLayer = {
       id: `kicker-${n}`, kind: 'text', text: { screen, caption: 'kicker' },

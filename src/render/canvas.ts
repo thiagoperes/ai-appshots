@@ -3,7 +3,7 @@ import type { OverlayOptions } from 'sharp';
 
 import { ellipseGradientToSvg, linearGradientToSvg, toPaint } from './color.ts';
 import { wrap } from './text.ts';
-import { measureLine, typesetLine } from './typeset.ts';
+import { measureLine, typesetCaption } from './typeset.ts';
 import type { TextStyle } from './typeset.ts';
 import type { CanvasTheme, Caption, Size, ThemeName } from '../types.ts';
 import { captionLayout } from './caption-layout.ts';
@@ -174,12 +174,12 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
     family: canvas.titleFont ?? canvas.sansFont,
     fontFile: canvas.titleFontFile,
     size: probe.titleSize,
-    weight: 700,
+    weight: canvas.titleWeight ?? 700,
     letterSpacing: probe.titleSize * -0.032,
     colour: palette.title,
   };
 
-  let title: Awaited<ReturnType<typeof typesetLine>> | undefined;
+  let title: Awaited<ReturnType<typeof typesetCaption>> | undefined;
   let titleSize = probe.titleSize;
   for (let size = probe.titleSize; size >= Math.ceil(probe.titleSize * minScale); size -= 1) {
     const titleStyle = { ...baseTitleStyle, size, letterSpacing: size * -0.025 };
@@ -188,7 +188,7 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
     const widths = await Promise.all(lines.map((line) => measureLine(line, titleStyle)));
     if (widths.some((width) => width > maxWidth)) continue;
     // Shape the whole paragraph: Pango preserves baselines across all lines.
-    const candidate = await typesetLine(lines.join('\n'), titleStyle);
+    const candidate = await typesetCaption(lines.join('\n'), titleStyle);
     if (candidate.height <= probe.titleBlockHeight && candidate.width <= maxWidth) {
       title = candidate;
       titleSize = size;
@@ -211,7 +211,7 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   };
 
   const kicker = label
-    ? await typesetLine(label.toUpperCase(), kickerStyle)
+    ? await typesetCaption(label.toUpperCase(), kickerStyle)
     : undefined;
 
   if (kicker && (kicker.width > maxWidth || kicker.height > probe.kickerHeight)) {
