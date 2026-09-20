@@ -25,6 +25,7 @@ export { createPreset, compositionLayers } from './render/presets';
 export type { PresetContext } from './render/presets';
 export { renderGallery } from './render/gallery';
 export { mergeCompositions } from './composition-plan';
+export { readableDeviceLayer, readabilityPolicy } from './readability';
 export type * from './composition-types';
 export {
   captureSpecFor,

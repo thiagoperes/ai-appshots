@@ -1,6 +1,6 @@
 {
   "name": "ai-appshots",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Apple and Google Play store screenshots, built by agents, for agents.",
   "keywords": [
     "app-store",

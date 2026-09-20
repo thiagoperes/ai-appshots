@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import * as opentype from 'opentype.js';
+import opentype from 'opentype.js';
 import sharp from 'sharp';
 
 import { escapeXml, toPaint } from './color.ts';

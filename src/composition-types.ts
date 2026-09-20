@@ -54,6 +54,8 @@ export interface DeviceLayer extends LayerPlacement {
   readonly crop?: SourceCrop;
   /** Rounded corners for an unframed screen, in panel-width units. */
   readonly radius?: number;
+  /** Smallest important UI text, in source-image pixels before cropping/resizing. */
+  readonly sourceTextSize?: number;
 }
 
 export interface ImageLayer extends LayerPlacement {
@@ -120,6 +122,13 @@ export interface CompositionSpec {
   readonly layers?: readonly CompositionLayer[];
   /** Preset IDs are title-1, kicker-1, device-1, detail-1, etc. */
   readonly overrides?: Readonly<Record<string, LayerOverride>>;
+  /** Reject UI that becomes unreadable at mobile preview size. true uses 390px / 14px. */
+  readonly readability?: boolean | ReadabilityPolicy;
+}
+
+export interface ReadabilityPolicy {
+  readonly previewWidth?: number;
+  readonly minTextSize?: number;
 }
 
 export interface PanoramaSpec {
