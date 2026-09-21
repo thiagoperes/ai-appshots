@@ -13,6 +13,8 @@ import { compositionLayers } from './presets.ts';
 import { wrap } from './text.ts';
 import { measureLine, typesetCaption } from './typeset.ts';
 import type { TextStyle } from './typeset.ts';
+import { assertReadableText, readabilityPolicy } from '../readability.ts';
+import { validateFullScreenLayer, assertFullScreenPlacement } from '../full-screen.ts';
 
 export interface CompositionOptions {
   readonly output: Size;
@@ -140,9 +142,11 @@ async function fitText(layer: TextLayer, options: CompositionOptions) {
   if (!text.trim()) return undefined;
   const width = Math.max(1, Math.round(layer.width * options.output.width));
   const height = Math.max(1, Math.round(layer.height * options.output.height));
-  const size = (layer.fontSize ?? 0.07) * options.output.width;
-  const min = Math.ceil((layer.minFontSize ?? (layer.fontSize ?? 0.07) * 0.72) * options.output.width);
-  for (let current = Math.max(1, Math.round(size)); current >= min; current -= 1) {
+  const policy = readabilityPolicy(options.composition.readability);
+  const readableSize = policy ? policy.minTextSize * options.output.width / policy.previewWidth / (layer.scale ?? 1) : 0;
+  const size = Math.max((layer.fontSize ?? 0.07) * options.output.width, readableSize);
+  const min = Math.ceil(Math.max((layer.minFontSize ?? (layer.fontSize ?? 0.07) * 0.72) * options.output.width, readableSize));
+  for (let current = Math.max(1, Math.ceil(size)); current >= min; current -= 1) {
     const style: TextStyle = {
       family: layer.font ?? options.canvas.titleFont ?? options.canvas.sansFont,
       fontFile: layer.fontFile ? resolve(options.assetRoot ?? '.', layer.fontFile) : undefined,
@@ -176,13 +180,24 @@ async function renderImage(layer: DeviceLayer | ImageLayer, options: Composition
   const source = layer.kind === 'device'
     ? await options.resolveDevice(layer)
     : { image: await readFile(resolve(options.assetRoot ?? '.', layer.path)), appleArtwork: false };
+  if (layer.kind === 'device' && layer.fullScreen) validateFullScreenLayer(layer);
   let input = source.image;
   if (layer.crop) input = await cropImage(input, layer.crop, layer.id);
+  const sourceSize = await sharp(input).metadata();
   const width = Math.max(1, Math.round(layer.width * options.output.width));
   const height = layer.height === undefined ? undefined : Math.max(1, Math.round(layer.height * options.output.height));
   input = await sharp(input).resize({ width, height,
     fit: layer.kind === 'device' ? 'inside' : layer.fit ?? 'contain', background: transparent,
   }).png().toBuffer();
+  const policy = readabilityPolicy(options.composition.readability);
+  if (policy && layer.kind === 'device' && !layer.fullScreen) {
+    if (!layer.sourceTextSize || !Number.isFinite(layer.sourceTextSize) || layer.sourceTextSize <= 0) {
+      throw new Error(`Layer "${layer.id}" needs sourceTextSize to verify mobile UI readability.`);
+    }
+    const rendered = await sharp(input).metadata();
+    assertReadableText(layer.id, layer.sourceTextSize * rendered.width! / sourceSize.width! *
+      (layer.scale ?? 1) * policy.previewWidth / options.output.width, policy.minTextSize);
+  }
   if (layer.radius) {
     const size = await sharp(input).metadata();
     input = await sharp(input).ensureAlpha().composite([{
@@ -276,6 +291,9 @@ export async function renderComposition(options: CompositionOptions): Promise<Co
     const left = Math.round(layer.x * output.width + dx * Math.cos(radians) - dy * Math.sin(radians) - after.width! / 2);
     const top = Math.round(layer.y * output.height + dx * Math.sin(radians) + dy * Math.cos(radians) - after.height! / 2);
     const clipped = left < 0 || top < 0 || left + after.width! > size.width || top + after.height! > size.height;
+    if (layer.kind === 'device' && layer.fullScreen) {
+      assertFullScreenPlacement(layer, { width: after.width!, height: after.height! }, output, left, top);
+    }
     const crossesSeam = Array.from({ length: options.screens.length - 1 }, (_, i) => (i + 1) * output.width)
       .some((seam) => left < seam && left + after.width! > seam);
     if (layer.kind === 'text' && (clipped || crossesSeam)) notices.push({ layer: layer.id, message: 'Text crosses an export edge or panorama seam; review at gallery size.' });
