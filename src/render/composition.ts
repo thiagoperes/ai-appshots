@@ -14,6 +14,7 @@ import { wrap } from './text.ts';
 import { measureLine, typesetCaption } from './typeset.ts';
 import type { TextStyle } from './typeset.ts';
 import { assertReadableText, readabilityPolicy } from '../readability.ts';
+import { validateFullScreenLayer, assertFullScreenPlacement } from '../full-screen.ts';
 
 export interface CompositionOptions {
   readonly output: Size;
@@ -179,6 +180,7 @@ async function renderImage(layer: DeviceLayer | ImageLayer, options: Composition
   const source = layer.kind === 'device'
     ? await options.resolveDevice(layer)
     : { image: await readFile(resolve(options.assetRoot ?? '.', layer.path)), appleArtwork: false };
+  if (layer.kind === 'device' && layer.fullScreen) validateFullScreenLayer(layer);
   let input = source.image;
   if (layer.crop) input = await cropImage(input, layer.crop, layer.id);
   const sourceSize = await sharp(input).metadata();
@@ -188,7 +190,7 @@ async function renderImage(layer: DeviceLayer | ImageLayer, options: Composition
     fit: layer.kind === 'device' ? 'inside' : layer.fit ?? 'contain', background: transparent,
   }).png().toBuffer();
   const policy = readabilityPolicy(options.composition.readability);
-  if (policy && layer.kind === 'device') {
+  if (policy && layer.kind === 'device' && !layer.fullScreen) {
     if (!layer.sourceTextSize || !Number.isFinite(layer.sourceTextSize) || layer.sourceTextSize <= 0) {
       throw new Error(`Layer "${layer.id}" needs sourceTextSize to verify mobile UI readability.`);
     }
@@ -289,6 +291,9 @@ export async function renderComposition(options: CompositionOptions): Promise<Co
     const left = Math.round(layer.x * output.width + dx * Math.cos(radians) - dy * Math.sin(radians) - after.width! / 2);
     const top = Math.round(layer.y * output.height + dx * Math.sin(radians) + dy * Math.cos(radians) - after.height! / 2);
     const clipped = left < 0 || top < 0 || left + after.width! > size.width || top + after.height! > size.height;
+    if (layer.kind === 'device' && layer.fullScreen) {
+      assertFullScreenPlacement(layer, { width: after.width!, height: after.height! }, output, left, top);
+    }
     const crossesSeam = Array.from({ length: options.screens.length - 1 }, (_, i) => (i + 1) * output.width)
       .some((seam) => left < seam && left + after.width! > seam);
     if (layer.kind === 'text' && (clipped || crossesSeam)) notices.push({ layer: layer.id, message: 'Text crosses an export edge or panorama seam; review at gallery size.' });

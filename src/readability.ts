@@ -18,7 +18,7 @@ export function readabilityPolicy(value?: boolean | ReadabilityPolicy) {
 export function assertReadableText(id: string, previewTextSize: number, minimum: number) {
   if (!Number.isFinite(previewTextSize) || previewTextSize + 0.01 < minimum) {
     throw new Error(`Layer "${id}" renders UI text at ${previewTextSize.toFixed(2)}px in the mobile preview; ` +
-      `at least ${minimum}px is required. Use a tighter content crop, enlarge the layer, or capture larger native text. ` +
+      `at least ${minimum}px is required. Enlarge the layer or capture larger native text. Use fullScreenDeviceLayer when the complete app UI must remain visible. ` +
       'Do not shrink the entire device to make it fit.');
   }
 }
