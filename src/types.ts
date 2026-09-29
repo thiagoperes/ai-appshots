@@ -150,6 +150,12 @@ export interface ScreenSpec {
    */
   readonly deepLink?: string;
   readonly theme: ThemeName;
+  /**
+   * Viewport this screen was captured at, in points, when it differs from the
+   * target's: a desktop window sized to what it shows. The target's device
+   * scale factor still applies. Unframed and window targets only.
+   */
+  readonly viewport?: Size;
   /** Canvas overrides for this screen. */
   readonly canvas?: CanvasThemeOverrides;
   /** Overrides the default composition for this screen. */
@@ -239,6 +245,11 @@ export interface CanvasTheme {
   readonly titleFontFile?: string;
   /** Title weight. Defaults to 700. */
   readonly titleWeight?: number;
+  /**
+   * Baseline-to-baseline distance for multi-line titles, in ems. Display faces
+   * carry generous vertical metrics; 1.0 or below sets a headline tight.
+   */
+  readonly titleLineHeight?: number;
   /** Kicker face. Falls back to `monoFont` for backwards compatibility. */
   readonly kickerFont?: string;
   readonly monoFont: string;

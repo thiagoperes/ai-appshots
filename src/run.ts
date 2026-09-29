@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { composeComposition, composeScreenshot } from './compose';
 import type { RunOptions } from './config';
 import { planCompositions } from './composition-plan';
+import { screenTarget } from './devices';
 import { renderGallery } from './render/gallery';
 import { captureSpecFor, createDriver, driverFor } from './drivers';
 import { resetDeliveryDirs, stageForDelivery } from './deliver';
@@ -153,12 +154,13 @@ export async function runCompose(options: RunOptions) {
             target, captures, screens: job.screens.map((screen) => screen.id), captions,
             composition: job.composition, canvas, theme: job.panorama?.theme ?? first.theme,
             locale, frameCacheDir: config.paths.frameCache, includesStatusBar, assetRoot: config.paths.root,
+            viewports: Object.fromEntries(job.sources.flatMap((source) => source.viewport ? [[source.id, source.viewport]] : [])),
           });
           panels = result.panels;
           for (const notice of result.notices) warn(`${target.id}/${locale}/${notice.layer}: ${notice.message}`);
         } else {
           panels = [await composeScreenshot({
-            target, capture: captures[first.id]!, caption: captions[first.id]!,
+            target: screenTarget(target, first), capture: captures[first.id]!, caption: captions[first.id]!,
             theme: first.theme, canvas, frameCacheDir: config.paths.frameCache, assetRoot: config.paths.root,
             includesStatusBar, index: config.screens.indexOf(first) + 1,
           })];

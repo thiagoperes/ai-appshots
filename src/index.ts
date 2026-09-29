@@ -9,7 +9,7 @@ export {
   STORE_POLICIES,
 } from './targets';
 export type { StorePolicy } from './targets';
-export { DEVICE_PROFILES, createDeviceTarget, formFactorFor } from './devices';
+export { DEVICE_PROFILES, createDeviceTarget, formFactorFor, screenTarget } from './devices';
 export type { DeviceProfile, DeviceTargetOptions } from './devices';
 export { DEFAULT_THEME, MONO_STACK, SANS_STACK, resolveTheme } from './theme';
 export { renderCanvas } from './render/canvas';

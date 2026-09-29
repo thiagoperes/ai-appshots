@@ -88,6 +88,11 @@ export interface TextLayer extends LayerPlacement {
   readonly letterSpacing?: number;
   /** Additional space between baselines, in ems. */
   readonly lineSpacing?: number;
+  /**
+   * Baseline-to-baseline distance in ems, replacing the font's own line height
+   * and `lineSpacing`. Use it to set display headlines tight, e.g. 0.98.
+   */
+  readonly lineHeight?: number;
   readonly maxLines?: number;
   readonly color?: string;
   readonly align?: 'left' | 'center' | 'right';
@@ -110,7 +115,10 @@ type EditableLayer<T> = T extends CompositionLayer ? Partial<Omit<T, 'id' | 'kin
 export type LayerOverride = EditableLayer<CompositionLayer>;
 
 export interface CompositionBackground {
-  /** CSS solid colour or linear-gradient, shared across all panels. */
+  /**
+   * A CSS background shared across all panels: a colour, `linear-gradient()`,
+   * `radial-gradient()`, or a comma-separated stack of them, top layer first.
+   */
   readonly fill?: string;
   readonly image?: string;
   readonly fit?: 'cover' | 'contain';
@@ -124,13 +132,20 @@ export interface CompositionSpec {
   readonly layers?: readonly CompositionLayer[];
   /** Preset IDs are title-1, kicker-1, device-1, detail-1, etc. */
   readonly overrides?: Readonly<Record<string, LayerOverride>>;
-  /** Enforce caption and measured UI text sizes. Full-screen devices enforce complete, prominent placement instead. true uses 390px / 14px. */
+  /**
+   * Enforce caption and measured UI text sizes. Full-screen devices enforce complete, prominent placement instead.
+   * true uses 390px / 14px on phones and tablets, and 800px / 9px UI / 20px captions on desktop.
+   */
   readonly readability?: boolean | ReadabilityPolicy;
 }
 
 export interface ReadabilityPolicy {
+  /** Width the store gallery shows one screenshot at, in pixels. */
   readonly previewWidth?: number;
+  /** Smallest measured UI text at preview width. */
   readonly minTextSize?: number;
+  /** Smallest caption text at preview width. Defaults to minTextSize, or 20px on desktop. */
+  readonly minCaptionSize?: number;
 }
 
 export interface PanoramaSpec {

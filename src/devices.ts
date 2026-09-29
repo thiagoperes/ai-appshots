@@ -1,5 +1,5 @@
 import type {
-  FormFactor, FrameSpec, Orientation, Platform, Size, StatusBarLayout, TargetSpec,
+  FormFactor, FrameSpec, Orientation, Platform, ScreenSpec, Size, StatusBarLayout, TargetSpec,
 } from './types.ts';
 
 export interface DeviceProfile {
@@ -135,4 +135,18 @@ export function createDeviceTarget(profile: string | DeviceProfile, options: Dev
 
 export function formFactorFor(target: Pick<TargetSpec, 'platform' | 'viewport' | 'formFactor'>): FormFactor {
   return target.formFactor ?? (target.platform === 'macos' ? 'desktop' : Math.min(target.viewport.width, target.viewport.height) >= 600 ? 'tablet' : 'phone');
+}
+
+/** The target as one screen was captured: a window sized to its content keeps its own viewport. */
+export function screenTarget(target: TargetSpec, screen: Pick<ScreenSpec, 'id' | 'viewport'>): TargetSpec {
+  const { viewport } = screen;
+  if (!viewport) return target;
+  if (![viewport.width, viewport.height].every((n) => Number.isFinite(n) && n > 0)) {
+    throw new Error(`Screen "${screen.id}" viewport must have a positive width and height.`);
+  }
+  if (target.frame.kind !== 'none' && target.frame.kind !== 'window') {
+    throw new Error(`Screen "${screen.id}" sets its own viewport, but "${target.id}" draws a device frame with a fixed screen. ` +
+      'Use an unframed or window target for windows sized to their content.');
+  }
+  return { ...target, formFactor: formFactorFor(target), viewport: { ...viewport } };
 }

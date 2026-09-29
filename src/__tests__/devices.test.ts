@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createDeviceTarget, DEVICE_PROFILES, formFactorFor } from '../devices.ts';
+import { createDeviceTarget, DEVICE_PROFILES, formFactorFor, screenTarget } from '../devices.ts';
 import { captureSize, pageViewport } from '../frames.ts';
 import { BUILT_IN_TARGETS, DEFAULT_TARGETS, findTarget } from '../targets.ts';
 
@@ -64,4 +64,18 @@ test('custom frame, caption, output and status-bar choices survive target creati
   });
   assert.equal(custom.id, 'custom-hardware');
   assert.deepEqual(captureSize(custom), { width: 800, height: 1400 });
+});
+
+test('a screen captured as a window sized to its content keeps its own viewport', () => {
+  const mac = { ...createDeviceTarget('mac-window'), frame: { kind: 'none' as const } };
+  assert.equal(screenTarget(mac, { id: 'one' }), mac);
+  const sized = screenTarget(mac, { id: 'one', viewport: { width: 900, height: 700 } });
+  assert.deepEqual(captureSize(sized), { width: 1800, height: 1400 });
+  assert.equal(sized.output, mac.output);
+  // A small tablet window stays a tablet rather than turning into a phone.
+  const tablet = { ...createDeviceTarget('ipad-pro-11'), frame: { kind: 'none' as const } };
+  assert.equal(formFactorFor(screenTarget(tablet, { id: 'one', viewport: { width: 400, height: 500 } })), 'tablet');
+  assert.throws(() => screenTarget(mac, { id: 'one', viewport: { width: 0, height: 700 } }), /positive/);
+  assert.throws(() => screenTarget(createDeviceTarget('iphone-17-pro'), { id: 'one', viewport: { width: 300, height: 600 } }),
+    /device frame/);
 });

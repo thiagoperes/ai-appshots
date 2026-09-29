@@ -111,6 +111,30 @@ test('browser edge rounding preserves captured pixels and still rejects larger m
   }
 });
 
+test('windows sized to their content compose at their own viewport', async () => {
+  const target: TargetSpec = {
+    id: 'mac', store: 'app-store', platform: 'macos', frame: { kind: 'none' },
+    viewport: { width: 100, height: 80 }, deviceScaleFactor: 2, output: { width: 400, height: 250 },
+    captionScale: 0.05, captionGapRatio: 0.02, statusBarHeight: 0, statusBarTextSize: 0, deliveryKind: 'macos',
+  };
+  const tall = await sharp({ create: { width: 120, height: 180, channels: 3, background: '#215abb' } }).png().toBuffer();
+  const options = {
+    target, captures: { one: tall }, screens: ['one'], captions: {}, canvas: DEFAULT_THEME, theme: 'light' as const,
+    locale: 'en', frameCacheDir: tmpdir(), includesStatusBar: true,
+    composition: { preset: 'blank' as const, background: { fill: '#ffffff' }, layers: [
+      { id: 'window', kind: 'device' as const, screen: 'one', x: 0, y: 0, width: 0.3, anchor: { x: 0, y: 0 } },
+    ] },
+  };
+  await assert.rejects(composeComposition(options), /not the shape/);
+  const { image } = await composeComposition({ ...options, viewports: { one: { width: 60, height: 90 } } });
+  // Unstretched: 0.3 × 400 = 120px wide keeps the capture's 2:3 shape, 180px tall.
+  const { data } = await sharp(image).extract({ left: 0, top: 179, width: 121, height: 2 }).removeAlpha().raw()
+    .toBuffer({ resolveWithObject: true });
+  assert.deepEqual([...data.subarray(0, 3)], [0x21, 0x5a, 0xbb]);
+  assert.deepEqual([...data.subarray(120 * 3, 121 * 3)], [255, 255, 255]);
+  assert.deepEqual([...data.subarray(121 * 3, 121 * 3 + 3)], [255, 255, 255]);
+});
+
 test('partial panorama runs export both panels and preserve other delivery assets', async () => {
   const root = await mkdtemp(resolve(tmpdir(), 'appshots-composition-'));
   try {
