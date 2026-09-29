@@ -56,15 +56,15 @@ jobs:
           console.log(published ? `${pkg.name}@${pkg.version} is already published; skipping.` : `Preparing ${pkg.name}@${pkg.version}.`);
           JS
 
-      - name: Require the existing publish token
+      - name: Require an npm that supports trusted publishing
         if: steps.version.outputs.published != 'true'
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo '::error::Missing NPM_TOKEN repository secret with publishing access to ai-appshots. Configure the existing publishing token; do not use browser authentication or npm login.'
-            exit 1
-          fi
+          node --input-type=module -e "
+            const [major, minor, patch] = process.argv[1].split('.').map(Number);
+            if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) {
+              throw new Error('Trusted publishing needs npm 11.5.1 or later; found ' + process.argv[1] + '.');
+            }
+          " "$(npm --version)"
 
       - name: Require successful CI for the tagged commit
         if: steps.version.outputs.published != 'true'
@@ -92,10 +92,12 @@ jobs:
         run: npm ci
       - if: steps.version.outputs.published != 'true'
         run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
-      - name: Publish with the token and signed provenance
+      # npm exchanges this job's OIDC identity for a one-time publish credential;
+      # the package's trusted publisher on npmjs.com must name this repository
+      # and release.yml.
+      - name: Publish through trusted publishing with signed provenance
         if: steps.version.outputs.published != 'true'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PACKAGE_VERSION: ${{ steps.version.outputs.version }}
         run: npm publish "$RUNNER_TEMP/ai-appshots-$PACKAGE_VERSION.tgz" --access public --tag latest --provenance --ignore-scripts
       - name: Verify the published artifact
