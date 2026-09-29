@@ -8,7 +8,7 @@ import type {
   DeviceLayer, ImageLayer, LayerPlacement, ShapeLayer, SourceCrop, TextLayer,
 } from '../composition-types';
 import type { CanvasTheme, CaptionBundle, FormFactor, Size, ThemeName } from '../types';
-import { escapeXml, linearGradientToSvg, toPaint } from './color.ts';
+import { escapeXml, fillLayersToSvg, toPaint } from './color.ts';
 import { compositionLayers } from './presets.ts';
 import { wrap } from './text.ts';
 import { measureLine, typesetCaption } from './typeset.ts';
@@ -77,28 +77,27 @@ function validateLayer(layer: CompositionLayer) {
     number(layer.weight ?? 700, `${prefix} weight`, 100, 900);
     number(layer.letterSpacing ?? -0.025, `${prefix} letterSpacing`, -0.25, 2);
     number(layer.lineSpacing ?? 0, `${prefix} lineSpacing`, 0, 3);
+    number(layer.lineHeight ?? 1, `${prefix} lineHeight`, 0.6, 3);
     const lines = number(layer.maxLines ?? 3, `${prefix} maxLines`, 1, 20);
     if (!Number.isInteger(lines)) throw new Error(`${prefix} maxLines must be an integer.`);
   }
 }
 
-function fillMarkup(fill: string, size: Size) {
-  if (fill.trim().startsWith('linear-gradient(')) {
-    return { defs: linearGradientToSvg(fill, 'fill', size), paint: 'fill="url(#fill)"' };
-  }
-  const paint = toPaint(fill);
-  return { defs: '', paint: `fill="${escapeXml(paint.color)}" fill-opacity="${paint.opacity}"` };
-}
-
 function shapeBuffer(size: Size, fill: string, layer?: ShapeLayer, radius = 0, strokeWidth = 0) {
-  const { defs, paint } = fillMarkup(fill, size);
+  const { defs, paints } = fillLayersToSvg(fill, 'fill', size);
   const stroke = toPaint(layer?.stroke ?? 'transparent');
-  const attributes = `${paint} stroke="${escapeXml(stroke.color)}" stroke-opacity="${stroke.opacity}" stroke-width="${strokeWidth}"`;
   const inset = strokeWidth / 2;
-  const shape = layer?.shape === 'ellipse'
-    ? `<ellipse cx="${size.width / 2}" cy="${size.height / 2}" rx="${Math.max(0, size.width / 2 - inset)}" ry="${Math.max(0, size.height / 2 - inset)}" ${attributes}/>`
-    : `<rect x="${inset}" y="${inset}" width="${Math.max(0, size.width - strokeWidth)}" height="${Math.max(0, size.height - strokeWidth)}" rx="${radius}" ${attributes}/>`;
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><defs>${defs}</defs>${shape}</svg>`);
+  // Every background layer fills the same outline; only the top one strokes it.
+  const shapes = paints.map((paint, index) => {
+    const outline = index === paints.length - 1
+      ? `stroke="${escapeXml(stroke.color)}" stroke-opacity="${stroke.opacity}" stroke-width="${strokeWidth}"`
+      : 'stroke="none"';
+    const attributes = `${paint} ${outline}`;
+    return layer?.shape === 'ellipse'
+      ? `<ellipse cx="${size.width / 2}" cy="${size.height / 2}" rx="${Math.max(0, size.width / 2 - inset)}" ry="${Math.max(0, size.height / 2 - inset)}" ${attributes}/>`
+      : `<rect x="${inset}" y="${inset}" width="${Math.max(0, size.width - strokeWidth)}" height="${Math.max(0, size.height - strokeWidth)}" rx="${radius}" ${attributes}/>`;
+  });
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><defs>${defs}</defs>${shapes.join('')}</svg>`);
 }
 
 async function withOpacity(input: Buffer, opacity: number) {
@@ -142,8 +141,8 @@ async function fitText(layer: TextLayer, options: CompositionOptions) {
   if (!text.trim()) return undefined;
   const width = Math.max(1, Math.round(layer.width * options.output.width));
   const height = Math.max(1, Math.round(layer.height * options.output.height));
-  const policy = readabilityPolicy(options.composition.readability);
-  const readableSize = policy ? policy.minTextSize * options.output.width / policy.previewWidth / (layer.scale ?? 1) : 0;
+  const policy = readabilityPolicy(options.composition.readability, options.formFactor);
+  const readableSize = policy ? policy.minCaptionSize * options.output.width / policy.previewWidth / (layer.scale ?? 1) : 0;
   const size = Math.max((layer.fontSize ?? 0.07) * options.output.width, readableSize);
   const min = Math.ceil(Math.max((layer.minFontSize ?? (layer.fontSize ?? 0.07) * 0.72) * options.output.width, readableSize));
   for (let current = Math.max(1, Math.ceil(size)); current >= min; current -= 1) {
@@ -154,6 +153,7 @@ async function fitText(layer: TextLayer, options: CompositionOptions) {
       letterSpacing: current * (layer.letterSpacing ?? -0.025),
       colour: layer.color ?? options.canvas[options.theme].title,
       align: layer.align ?? 'left', lineSpacing: current * (layer.lineSpacing ?? 0),
+      lineHeight: layer.lineHeight === undefined ? undefined : current * layer.lineHeight,
     };
     const lines = await wrap(text, style, width);
     if (lines.length > (layer.maxLines ?? 3)) continue;
@@ -189,14 +189,14 @@ async function renderImage(layer: DeviceLayer | ImageLayer, options: Composition
   input = await sharp(input).resize({ width, height,
     fit: layer.kind === 'device' ? 'inside' : layer.fit ?? 'contain', background: transparent,
   }).png().toBuffer();
-  const policy = readabilityPolicy(options.composition.readability);
+  const policy = readabilityPolicy(options.composition.readability, options.formFactor);
   if (policy && layer.kind === 'device' && !layer.fullScreen) {
     if (!layer.sourceTextSize || !Number.isFinite(layer.sourceTextSize) || layer.sourceTextSize <= 0) {
-      throw new Error(`Layer "${layer.id}" needs sourceTextSize to verify mobile UI readability.`);
+      throw new Error(`Layer "${layer.id}" needs sourceTextSize to verify UI readability.`);
     }
     const rendered = await sharp(input).metadata();
     assertReadableText(layer.id, layer.sourceTextSize * rendered.width! / sourceSize.width! *
-      (layer.scale ?? 1) * policy.previewWidth / options.output.width, policy.minTextSize);
+      (layer.scale ?? 1) * policy.previewWidth / options.output.width, policy.minTextSize, policy.previewWidth);
   }
   if (layer.radius) {
     const size = await sharp(input).metadata();

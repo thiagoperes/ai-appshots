@@ -2,6 +2,7 @@ import { access } from 'node:fs/promises';
 
 import type { Browser, BrowserContext, Page } from 'playwright';
 
+import { screenTarget } from '../devices';
 import { pageViewport } from '../frames';
 import { info, warn } from '../log';
 import { ensureParentDir } from '../paths';
@@ -194,15 +195,17 @@ async function captureScreen(
   }
 
   const page = await context.newPage();
+  const captured = screenTarget(target, screen);
 
   try {
+    if (captured !== target) await page.setViewportSize(pageViewport(captured));
     await page.emulateMedia({ colorScheme: screen.theme });
 
     await config.prepare?.({
       context,
       page,
       screen,
-      target,
+      target: captured,
       baseUrl: config.baseUrl,
     });
 

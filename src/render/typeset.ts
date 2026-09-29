@@ -43,6 +43,8 @@ export interface TextStyle {
   readonly align?: 'left' | 'center' | 'right';
   /** Additional space between paragraph baselines, in pixels. */
   readonly lineSpacing?: number;
+  /** Baseline-to-baseline distance in pixels; replaces the font line height and `lineSpacing`. */
+  readonly lineHeight?: number;
 }
 
 function description({ family, size, weight }: TextStyle) {
@@ -97,13 +99,81 @@ function fontFromFile(path: string) {
   return pending;
 }
 
+/** Parts of the opentype.js API its type definitions omit. */
+interface FontTables {
+  readonly position: {
+    getDefaultScriptName(): string;
+    getKerningTables(script: string): unknown;
+    getKerningValue(tables: unknown, left: number, right: number): number;
+  };
+  readonly substitution: {
+    getLigatures(feature: string, script: string, language: string): { sub: number[]; by: number }[];
+  };
+}
+
+/**
+ * opentype.js runs `ccmp` on every string and throws on lookups it cannot
+ * apply, such as a class-based chained context. Such fonts are shaped by
+ * character, keeping their plain ligatures and the same kerning opentype.js
+ * would use.
+ */
+function unshapedPaths(font: opentype.Font, line: string, size: number, letterSpacing: number) {
+  const { position, substitution } = font as unknown as FontTables;
+  const ligatures = (font.tables.gsub ? [...substitution.getLigatures('liga', 'latn', 'dflt')] : [])
+    .sort((a, b) => b.sub.length - a.sub.length);
+  const mapped = Array.from(line, (char) => font.charToGlyph(char));
+  const glyphs: opentype.Glyph[] = [];
+  for (let i = 0; i < mapped.length;) {
+    const match = ligatures.find((ligature) => ligature.sub.every((index, k) => mapped[i + k]?.index === index));
+    glyphs.push(match ? font.glyphs.get(match.by) : mapped[i]!);
+    i += match ? match.sub.length : 1;
+  }
+  const tables = font.tables.gpos ? position.getKerningTables(position.getDefaultScriptName()) : undefined;
+  const scale = size / font.unitsPerEm;
+  let x = 0;
+  return glyphs.map((glyph, i) => {
+    const path = glyph.getPath(x, 0, size);
+    x += (glyph.advanceWidth ?? 0) * scale + letterSpacing * size;
+    const next = glyphs[i + 1];
+    if (next) {
+      x += (tables ? position.getKerningValue(tables, glyph.index, next.index) : font.getKerningValue(glyph, next)) * scale;
+    }
+    return path;
+  });
+}
+
+/**
+ * SVG path data at three decimals. opentype.js's own `toPathData` writes `NaN`
+ * for a coordinate within about 1e-7 of an integer, which breaks whichever
+ * glyph lands there.
+ */
+export function svgPathData(path: opentype.Path) {
+  const n = (value: number) => String(Math.round(value * 1000) / 1000 || 0);
+  return path.commands.map((command) => {
+    switch (command.type) {
+      case 'M':
+      case 'L': return `${command.type}${n(command.x)} ${n(command.y)}`;
+      case 'Q': return `Q${n(command.x1)} ${n(command.y1)} ${n(command.x)} ${n(command.y)}`;
+      case 'C': return `C${n(command.x1)} ${n(command.y1)} ${n(command.x2)} ${n(command.y2)} ${n(command.x)} ${n(command.y)}`;
+      case 'Z': return 'Z';
+    }
+  }).join('');
+}
+
+export function linePaths(font: opentype.Font, line: string, size: number, letterSpacing: number) {
+  try {
+    return font.getPaths(line, 0, 0, size, { kerning: true, letterSpacing });
+  } catch (error) {
+    if (!/not yet supported/.test(String(error))) throw error;
+    return unshapedPaths(font, line, size, letterSpacing);
+  }
+}
+
 /** Renders a bundled font as paths, so host font registries cannot substitute it. */
 async function typesetFile(text: string, style: TextStyle): Promise<TypesetLine> {
   const font = await fontFromFile(style.fontFile!);
   const lines = text.split('\n').map((line) => {
-    const paths = font.getPaths(line, 0, 0, style.size, {
-      kerning: true, letterSpacing: style.letterSpacing / style.size,
-    });
+    const paths = linePaths(font, line, style.size, style.letterSpacing / style.size);
     const boxes = paths.map((path) => path.getBoundingBox()).filter((box) => !box.isEmpty());
     const left = boxes.length ? Math.min(...boxes.map((box) => box.x1)) : 0;
     const right = boxes.length ? Math.max(...boxes.map((box) => box.x2)) : 0;
@@ -116,7 +186,7 @@ async function typesetFile(text: string, style: TextStyle): Promise<TypesetLine>
   const top = -font.ascender * scale;
   const bottom = -font.descender * scale;
   const lineWidth = Math.max(0, ...lines.map((line) => line.width));
-  const lineHeight = bottom - top + (style.lineSpacing ?? 0);
+  const lineHeight = style.lineHeight ?? bottom - top + (style.lineSpacing ?? 0);
   const width = Math.max(1, Math.ceil(lineWidth) + inset * 2);
   const height = Math.max(1, Math.ceil(bottom - top + (lines.length - 1) * lineHeight) + inset * 2);
   const align = style.align === 'left' ? 0 : style.align === 'right' ? 1 : 0.5;
@@ -124,7 +194,7 @@ async function typesetFile(text: string, style: TextStyle): Promise<TypesetLine>
     const x = inset - line.left + (lineWidth - line.width) * align;
     const y = inset - top + i * lineHeight;
     return `<g transform="translate(${x.toFixed(3)} ${y.toFixed(3)})">` +
-      line.paths.map((path) => `<path d="${path.toPathData(3)}"/>`).join('') + '</g>';
+      line.paths.map((path) => `<path d="${svgPathData(path)}"/>`).join('') + '</g>';
   }).join('');
   const paint = toPaint(style.colour ?? '#000000');
   const svg = Buffer.from(
@@ -144,22 +214,43 @@ export async function typesetCaption(text: string, style: TextStyle): Promise<Ty
   return { buffer: data, width: info.width, height: info.height };
 }
 
+function pangoText(text: string, style: TextStyle, spacing: number) {
+  return sharp({
+    text: {
+      text: markup(text, style), font: description(style), fontfile: style.fontFile,
+      rgba: true, dpi: 72,
+      align: style.align === 'left' || style.align === 'right' ? style.align : 'centre',
+      spacing,
+    },
+  }).png().toBuffer({ resolveWithObject: true });
+}
+
+const pitches = new Map<string, Promise<number>>();
+
+/** Pango's own baseline-to-baseline distance for a style, in pixels. */
+function naturalPitch(style: TextStyle) {
+  const key = `${style.family}|${style.size}|${style.weight}`;
+  let pitch = pitches.get(key);
+  if (!pitch) {
+    const probe = { ...style, letterSpacing: 0 };
+    pitch = Promise.all([pangoText('Hg', probe, 0), pangoText('Hg\nHg', probe, 0)])
+      .then(([one, two]) => two.info.height - one.info.height);
+    pitches.set(key, pitch);
+  }
+  return pitch;
+}
+
 export async function typesetLine(
   text: string,
   style: TextStyle,
 ): Promise<TypesetLine> {
   if (style.fontFile) return typesetFile(text, style);
 
-  const { data, info } = await sharp({
-    text: {
-      text: markup(text, style), font: description(style), fontfile: style.fontFile,
-      rgba: true, dpi: 72,
-      align: style.align === 'left' || style.align === 'right' ? style.align : 'centre',
-      spacing: style.lineSpacing ?? 0,
-    },
-  })
-    .png()
-    .toBuffer({ resolveWithObject: true });
+  // libvips `spacing` is the gap Pango adds between lines, in whole pixels.
+  const spacing = style.lineHeight === undefined
+    ? style.lineSpacing ?? 0
+    : style.lineHeight - await naturalPitch(style);
+  const { data, info } = await pangoText(text, style, Math.round(spacing));
 
   // Pango substitutes silently when a family is missing, but with no font
   // installed at all it produces nothing, and the caption would vanish from an

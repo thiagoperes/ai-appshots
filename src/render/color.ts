@@ -101,7 +101,7 @@ export interface GradientStop {
 }
 
 /** Splits on commas that are not inside brackets, e.g. between `rgba(...)`. */
-function splitTopLevel(value: string) {
+export function splitTopLevel(value: string) {
   const parts: string[] = [];
   let depth = 0;
   let current = '';
@@ -251,6 +251,98 @@ export function linearGradientToSvg(
     `y2="${coordinate(centre.y + direction.y * half)}">` +
     `${stopsToSvg(stops)}</linearGradient>`
   );
+}
+
+const POSITIONS: Record<string, number> = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
+
+function length(value: string, extent: number, name: string) {
+  const token = value.trim().toLowerCase();
+  if (token in POSITIONS) return POSITIONS[token]! * extent;
+  const number = Number.parseFloat(token);
+  if (!Number.isFinite(number)) throw new Error(`Could not read the gradient ${name} "${value}".`);
+  if (token.endsWith('%')) return (number / 100) * extent;
+  if (token.endsWith('px') || /^-?[\d.]+$/.test(token)) return number;
+  throw new Error(`Gradient ${name} "${value}" must be a percentage or pixels.`);
+}
+
+/**
+ * Converts a CSS `radial-gradient()` into an SVG `<radialGradient>` for a box of
+ * the given size. Supports `[ellipse|circle] [<rx> <ry> | <r> | closest-side |
+ * farthest-corner] [at <x> <y>]`; percentages follow CSS, so an ellipse's radii
+ * are fractions of the box's width and height.
+ */
+export function radialGradientToSvg(
+  value: string,
+  id: string,
+  size: { readonly width: number; readonly height: number },
+) {
+  const match = /^radial-gradient\(([\s\S]*)\)$/i.exec(value.trim());
+  if (!match?.[1]) {
+    throw new Error(`Could not read the gradient "${value}". Use radial-gradient(<shape> at <x> <y>, <colour> <stop>%, ...).`);
+  }
+  const parts = splitTopLevel(match[1]);
+  const first = parts[0] ?? '';
+  // A leading colour means no shape clause, as in `radial-gradient(#fff, #000)`.
+  const hasShape = /^(ellipse|circle|closest-side|farthest-corner|at)\b/i.test(first) ||
+    /\sat\s/i.test(first) || /^-?[\d.]+(%|px)(\s+-?[\d.]+(%|px))?$/i.test(first);
+  const at = hasShape ? /(?:^|\s)at\s+(.+)$/i.exec(first) : null;
+  const shapePart = hasShape ? (at ? first.slice(0, at.index) : first) : '';
+  const tokens = shapePart.trim().split(/\s+/).filter(Boolean);
+  const circle = tokens.some((token) => token.toLowerCase() === 'circle');
+  const sizes = tokens.filter((token) => !/^(ellipse|circle)$/i.test(token));
+  const position = (at?.[1] ?? 'center').trim().split(/\s+/);
+  // One keyword names one axis and centres the other, as in `at top`.
+  const [px, py] = position.length === 1
+    ? /^(top|bottom)$/i.test(position[0]!) ? ['center', position[0]!] : [position[0]!, 'center']
+    : [position[0]!, position[1]!];
+  const centre = { x: length(px, size.width, 'x position'), y: length(py, size.height, 'y position') };
+  const corner = {
+    x: Math.max(centre.x, size.width - centre.x),
+    y: Math.max(centre.y, size.height - centre.y),
+  };
+  const side = {
+    x: Math.min(centre.x, size.width - centre.x),
+    y: Math.min(centre.y, size.height - centre.y),
+  };
+  let radius: { x: number; y: number };
+  const keyword = sizes[0]?.toLowerCase();
+  if (keyword === 'closest-side') {
+    radius = circle ? { x: Math.min(side.x, side.y), y: Math.min(side.x, side.y) } : side;
+  } else if (!keyword || keyword === 'farthest-corner') {
+    // CSS scales the farthest-side ellipse by √2 so it passes through the corner.
+    radius = circle
+      ? { x: Math.hypot(corner.x, corner.y), y: Math.hypot(corner.x, corner.y) }
+      : { x: corner.x * Math.SQRT2, y: corner.y * Math.SQRT2 };
+  } else {
+    const rx = length(sizes[0]!, size.width, 'radius');
+    const ry = circle || sizes.length === 1 ? rx : length(sizes[1]!, size.height, 'radius');
+    radius = { x: rx, y: ry };
+  }
+  if (!(radius.x > 0 && radius.y > 0)) throw new Error(`Gradient "${value}" has no area.`);
+  return ellipseGradientToSvg({ id, centre, radius, stops: stopsFor(hasShape ? parts.slice(1) : parts) });
+}
+
+/**
+ * A CSS background list, top layer first, drawn as SVG paints bottom layer
+ * first: `radial-gradient(...), #f1eadc` puts a glow over a flat paper tone.
+ */
+export function fillLayersToSvg(
+  value: string,
+  id: string,
+  size: { readonly width: number; readonly height: number },
+) {
+  const defs: string[] = [];
+  const paints = splitTopLevel(value).reverse().map((layer, index) => {
+    const gradient = `${id}-${index}`;
+    if (/^linear-gradient\(/i.test(layer)) defs.push(linearGradientToSvg(layer, gradient, size));
+    else if (/^radial-gradient\(/i.test(layer)) defs.push(radialGradientToSvg(layer, gradient, size));
+    else {
+      const paint = toPaint(layer);
+      return `fill="${escapeXml(paint.color)}" fill-opacity="${paint.opacity}"`;
+    }
+    return `fill="url(#${gradient})"`;
+  });
+  return { defs: defs.join(''), paints };
 }
 
 /**

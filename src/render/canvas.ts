@@ -167,6 +167,7 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   }
   const maxWidth = Math.round(output.width * ratio(canvas.titleWidthRatio ?? 0.8, 'titleWidthRatio'));
   const minScale = ratio(canvas.titleMinScale ?? 0.72, 'titleMinScale');
+  ratio(canvas.titleLineHeight ?? 1, 'titleLineHeight', 0.6, 3);
   ratio(canvas.deviceWidthRatio ?? 0.88, 'deviceWidthRatio');
   if (!caption.title.trim()) throw new Error('Caption title must not be empty.');
   const probe = captionLayout(options);
@@ -182,7 +183,10 @@ export async function renderCanvas(options: CanvasOptions): Promise<Buffer> {
   let title: Awaited<ReturnType<typeof typesetCaption>> | undefined;
   let titleSize = probe.titleSize;
   for (let size = probe.titleSize; size >= Math.ceil(probe.titleSize * minScale); size -= 1) {
-    const titleStyle = { ...baseTitleStyle, size, letterSpacing: size * -0.025 };
+    const titleStyle = {
+      ...baseTitleStyle, size, letterSpacing: size * -0.025,
+      ...(canvas.titleLineHeight === undefined ? {} : { lineHeight: size * canvas.titleLineHeight }),
+    };
     const lines = await wrap(caption.title, titleStyle, maxWidth);
     if (lines.length > maxLines) continue;
     const widths = await Promise.all(lines.map((line) => measureLine(line, titleStyle)));

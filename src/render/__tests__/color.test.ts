@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { linearGradientToSvg, stopsFor, toPaint } from '../color.ts';
+import { fillLayersToSvg, linearGradientToSvg, radialGradientToSvg, stopsFor, toPaint } from '../color.ts';
 
 test('splits alpha out of colours into a separate opacity', () => {
   assert.deepEqual(toPaint('#1A2BC3'), { color: '#1A2BC3', opacity: 1 });
@@ -75,6 +75,34 @@ test('carries stop opacity into the SVG', () => {
     svg,
     /offset="44.000%" stop-color="rgb\(7, 8, 38\)" stop-opacity="0.5"/,
   );
+});
+
+test('sizes radial gradients the way CSS does', () => {
+  const box = { width: 200, height: 100 };
+  // Ellipse radii are fractions of each axis.
+  assert.match(radialGradientToSvg('radial-gradient(ellipse 50% 25% at 50% 80%, #fff, #000)', 'g', box),
+    /cx="100.00" cy="80.00" r="100.00" gradientTransform="translate\(0 60.00\) scale\(1 0.25000\)"/);
+  // Without a size, CSS reaches the farthest corner: √2 × the farthest sides.
+  assert.match(radialGradientToSvg('radial-gradient(#fff, #000)', 'g', { width: 100, height: 100 }),
+    /cx="50.00" cy="50.00" r="70.71"/);
+  assert.match(radialGradientToSvg('radial-gradient(circle closest-side at 25% 50%, #fff, #000)', 'g', box),
+    /cx="50.00" cy="50.00" r="50.00"/);
+  // One keyword places one axis and centres the other.
+  assert.match(radialGradientToSvg('radial-gradient(circle 40px at top, #fff, #000)', 'g', box),
+    /cx="100.00" cy="0.00" r="40.00"/);
+  assert.throws(() => radialGradientToSvg('radial-gradient(ellipse 0% 10%, #fff, #000)', 'g', box), /no area/);
+});
+
+test('draws a background list bottom layer first', () => {
+  const { defs, paints } = fillLayersToSvg(
+    'radial-gradient(ellipse 60% 50% at 50% 70%, #f7f2e8, #f1eadc00 72%), #f1eadc',
+    'bg',
+    { width: 300, height: 200 },
+  );
+
+  assert.deepEqual(paints, ['fill="#f1eadc" fill-opacity="1"', 'fill="url(#bg-1)"']);
+  assert.match(defs, /<radialGradient id="bg-1"/);
+  assert.match(defs, /stop-color="#f1eadc" stop-opacity="0"/);
 });
 
 test('refuses a gradient it cannot read', () => {

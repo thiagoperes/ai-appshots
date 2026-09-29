@@ -141,10 +141,10 @@ composition: {
 | --- | --- |
 | Position and size | `x`, `y`, `width`, `height`, `anchor`, `scale` |
 | Appearance | `rotation`, `opacity`, `zIndex`, `hidden`, `shadow` |
-| Text | `font`, `fontFile`, `fontSize`, `minFontSize`, `weight`, `letterSpacing`, `lineSpacing`, `maxLines`, `align`, `verticalAlign`, `uppercase` |
-| Device | `screen`, `frame`, `crop`, `radius` |
+| Text | `font`, `fontFile`, `fontSize`, `minFontSize`, `weight`, `letterSpacing`, `lineSpacing`, `lineHeight`, `maxLines`, `align`, `verticalAlign`, `uppercase` |
+| Device | `screen`, `frame`, `crop`, `radius`, `sourceTextSize` |
 | Additional layers | `text`, `image`, `shape`, or `device` entries in `composition.layers` |
-| Background | A solid color, linear gradient, or local image with `fit` and `opacity` |
+| Background | A solid color, linear or radial gradient, a comma-separated stack of them, or a local image with `fit` and `opacity` |
 
 Positions and dimensions use fractions of **one output panel**, including in
 panoramas: `x: 1` is the first seam. Font size uses panel width; rotation uses
@@ -182,6 +182,7 @@ theme: {
 | `titleFontFile`, `kickerFontFile` | Absolute paths to TTF or OTF files, rendered directly without host font substitution |
 | `titleWeight` | Headline weight; `700`. A font file supplies its own face and weight |
 | `titleLines`, `titleMinScale` | Up to two lines by default; fit down to `0.72` of the requested font size |
+| `titleLineHeight` | Headline baseline-to-baseline distance in ems; the font's own leading by default |
 | `titleWidthRatio` | Caption width relative to panel width; `0.8` |
 | `captionTopRatio` | Top caption inset relative to the shorter canvas edge; `0.1` |
 | `kickerGapEm` | Label-to-headline gap relative to the fitted title size; `0.35` |

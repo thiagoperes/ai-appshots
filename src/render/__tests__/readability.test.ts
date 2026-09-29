@@ -25,8 +25,8 @@ test('rejects full tablet UI and height-constrained shrinkage at phone preview s
   assert.throws(() => readableDeviceLayer({ ...options,
     source: { width: 2064, height: 2752 }, sourceTextSize: 34,
     crop: { x: 0, y: 0, width: 1, height: 1 },
-  }), /mobile preview/);
-  assert.throws(() => readableDeviceLayer({ ...options, area: { ...area, height: 0.1 } }), /mobile preview/);
+  }), /390px store preview/);
+  assert.throws(() => readableDeviceLayer({ ...options, area: { ...area, height: 0.1 } }), /390px store preview/);
 });
 
 test('requires valid measured bounds and source text size', () => {
@@ -47,10 +47,10 @@ test('renderer rejects manual tiny UI overrides, including a hidden scale reduct
   const layer = readableDeviceLayer(options);
   await assert.rejects(renderComposition({ ...base,
     composition: { ...base.composition, layers: [{ ...layer, width: 0.2 }] },
-  }), /mobile preview/);
+  }), /390px store preview/);
   await assert.rejects(renderComposition({ ...base,
     composition: { ...base.composition, layers: [{ ...layer, scale: 0.5 }] },
-  }), /mobile preview/);
+  }), /390px store preview/);
   await assert.rejects(renderComposition({ ...base,
     composition: { ...base.composition, layers: [{ ...layer, sourceTextSize: undefined }] },
   }), /needs sourceTextSize/);

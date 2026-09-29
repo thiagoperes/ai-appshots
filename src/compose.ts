@@ -10,7 +10,7 @@ import {
 } from './frames';
 import { renderCssBezel } from './render/bezel';
 import { renderWindowFrame } from './render/window';
-import { formFactorFor } from './devices';
+import { formFactorFor, screenTarget } from './devices';
 import { renderCanvas } from './render/canvas';
 import { renderComposition } from './render/composition';
 import { compositionLayers } from './render/presets';
@@ -21,7 +21,7 @@ import {
   sampleTopColor,
 } from './render/status-bar';
 import { STORE_POLICIES } from './targets';
-import type { CanvasTheme, Caption, CaptionBundle, FrameSpec, TargetSpec, ThemeName } from './types';
+import type { CanvasTheme, Caption, CaptionBundle, FrameSpec, Size, TargetSpec, ThemeName } from './types';
 
 /**
  * Scales a native capture onto the exact pixel grid the bezel expects.
@@ -151,6 +151,8 @@ export interface ComposeCompositionOptions {
   readonly frameCacheDir: string;
   readonly includesStatusBar: boolean;
   readonly assetRoot?: string;
+  /** Capture viewports of sources that differ from the target's, keyed by screen ID. */
+  readonly viewports?: Readonly<Record<string, Size>>;
 }
 
 /** Prepares each capture/frame once, even when reused in several layers. */
@@ -163,19 +165,20 @@ export async function composeComposition(options: ComposeCompositionOptions) {
     if (layer.crop && frame.kind !== 'none') {
       throw new Error(`Layer "${layer.id}" crops the screen; set its frame to kind "none".`);
     }
+    const captured = screenTarget(target, { id: layer.screen, viewport: options.viewports?.[layer.screen] });
     let screen = screens.get(layer.screen);
     if (!screen) {
       const capture = options.captures[layer.screen];
       if (!capture) throw new Error(`Missing capture for composition source "${layer.screen}".`);
       screen = options.includesStatusBar
-        ? normalize(capture, target)
-        : buildScreen(target, capture, canvas.sansFont);
+        ? normalize(capture, captured)
+        : buildScreen(captured, capture, canvas.sansFont);
       screens.set(layer.screen, screen);
     }
     const key = `${layer.screen}|${JSON.stringify(frame)}`;
     let device = devices.get(key);
     if (!device) {
-      device = screen.then((buffer) => frameScreen(buffer, target, frame, options.frameCacheDir, canvas.sansFont, options.theme, options.assetRoot));
+      device = screen.then((buffer) => frameScreen(buffer, captured, frame, options.frameCacheDir, canvas.sansFont, options.theme, options.assetRoot));
       devices.set(key, device);
     }
     return { image: await device, appleArtwork: frame.kind === 'frameit' && target.platform !== 'android' };

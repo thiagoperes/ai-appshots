@@ -1,7 +1,7 @@
 import type { CompositionSpec, DeviceLayer, PanoramaSpec } from './composition-types';
 import type { ResolvedConfig, ScreenSpec, TargetSpec } from './types';
 import { compositionLayers } from './render/presets.ts';
-import { formFactorFor } from './devices.ts';
+import { formFactorFor, screenTarget } from './devices.ts';
 
 export interface CompositionJob {
   readonly screens: readonly ScreenSpec[];
@@ -81,6 +81,7 @@ export function planCompositions(config: ResolvedConfig, target: TargetSpec, sel
       if (!source || source.excludeTargets?.includes(target.id)) {
         throw new Error(`Composition references unavailable screen "${id}" for "${target.id}".`);
       }
+      screenTarget(target, source);
       return source;
     });
     jobs.push({ screens, sources, composition, panorama });
