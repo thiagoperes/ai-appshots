@@ -30,6 +30,23 @@ function rotatedSize(size: Size, rotation: number, output: Size) {
   };
 }
 
+/**
+ * A device bleeding past its panel's right edge runs into the next panel's
+ * caption; only the last panel's device may leave through the edge.
+ */
+function keepInPanel(layer: DeviceLayer, panel: number, panels: number, output: Size, from: number): DeviceLayer {
+  if (panel === panels - 1) return layer;
+  const rotation = layer.rotation ?? 0;
+  const bounds = rotatedSize({ width: layer.width, height: layer.height ?? 0 }, rotation, output);
+  const limit = panel + 0.98;
+  if (layer.x + bounds.width / 2 <= limit) return layer;
+  // Shrink rather than slide: sliding left would run into this panel's own caption.
+  const shrink = Math.min(1, (limit - from) / bounds.width);
+  const width = layer.width * shrink, height = (layer.height ?? 0) * shrink;
+  const fitted = rotatedSize({ width, height }, rotation, output);
+  return { ...layer, width, height, x: limit - fitted.width / 2 };
+}
+
 /** Returns fresh, editable layers. No preset is baked into a bitmap. */
 export function createPreset(preset: LayoutPreset, context: PresetContext): CompositionLayer[] {
   if (preset === 'blank') return [];
@@ -95,13 +112,13 @@ export function createPreset(preset: LayoutPreset, context: PresetContext): Comp
           { ...kicker, x: i + margin, y: kickerY, width: 0.29, align: 'left' },
           { ...title, x: i + margin, y: headlineY, width: 0.29, height: metrics ? titleHeight : caption.titleSize * 6 / output.height,
             maxLines: 5, align: 'left' },
-          { ...device, x: i + 0.69, y: 0.57, ...fittedSize(0.56, 0.74, source, output), rotation: -4 },
+          keepInPanel({ ...device, x: i + 0.69, y: 0.57, ...fittedSize(0.56, 0.74, source, output), rotation: -4 }, i, screens.length, output, i + margin + 0.31),
         );
       } else if (factor === 'tablet') {
         layers.push(
           { ...kicker, align: 'left' },
           { ...title, align: 'left' },
-          { ...device, x: i + 0.72, y: 0.64, ...fittedSize(0.88, 0.64, source, output), rotation: -5 },
+          keepInPanel({ ...device, x: i + 0.72, y: 0.64, ...fittedSize(0.88, 0.64, source, output), rotation: -5 }, i, screens.length, output, i + 0.02),
         );
       } else {
         const kickerY = 0.18;
@@ -110,7 +127,7 @@ export function createPreset(preset: LayoutPreset, context: PresetContext): Comp
           { ...kicker, x: i + margin, y: kickerY, width: 0.35, align: 'left' },
           { ...title, x: i + margin, y: headlineY, width: 0.35, height: metrics ? titleHeight : caption.titleSize * 6 / output.height,
             maxLines: 5, align: 'left' },
-          { ...device, x: i + 0.83, y: 0.65, ...fittedSize(0.65, 0.70, source, output), rotation: -5 },
+          keepInPanel({ ...device, x: i + 0.83, y: 0.65, ...fittedSize(0.65, 0.70, source, output), rotation: -5 }, i, screens.length, output, i + margin + 0.37),
         );
       }
     } else if (preset === 'feature-closeup') {

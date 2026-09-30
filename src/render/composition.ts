@@ -15,6 +15,8 @@ import { measureLine, typesetCaption } from './typeset.ts';
 import type { TextStyle } from './typeset.ts';
 import { assertReadableText, readabilityPolicy } from '../readability.ts';
 import { validateFullScreenLayer, assertFullScreenPlacement } from '../full-screen.ts';
+import { assertTextClear } from './clearance.ts';
+import type { Placement } from './clearance.ts';
 
 export interface CompositionOptions {
   readonly output: Size;
@@ -257,6 +259,8 @@ export async function renderComposition(options: CompositionOptions): Promise<Co
   layers.forEach(validateLayer);
   const notices: CompositionNotice[] = [];
   const overlays: OverlayOptions[] = [];
+  const placements: Placement[] = [];
+  const clearance = number(composition.textClearance ?? 0.02, 'textClearance', 0, 0.25) * output.width;
   const background = composition.background;
   if (background?.image) {
     const image = await sharp(await readFile(resolve(options.assetRoot ?? '.', background.image)))
@@ -305,7 +309,9 @@ export async function renderComposition(options: CompositionOptions): Promise<Co
     const overlay = await clippedOverlay(input, left, top, size);
     if (overlay) overlays.push(overlay);
     else notices.push({ layer: layer.id, message: 'Layer is entirely outside the exported canvas.' });
+    placements.push({ layer, image: input, left, top, width: after.width!, height: after.height! });
   }
+  await assertTextClear(placements, clearance, size);
   const backdrop = shapeBuffer(size, background?.fill ?? options.canvas[options.theme].sweep);
   const image = await sharp(backdrop).composite(overlays).png().toBuffer();
   const panels: Buffer[] = [];
