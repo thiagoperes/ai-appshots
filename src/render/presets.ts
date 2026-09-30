@@ -30,6 +30,32 @@ function rotatedSize(size: Size, rotation: number, output: Size) {
   };
 }
 
+/** The default text clearance, with room for antialiasing. */
+const CAPTION_CLEARANCE = 0.03;
+
+/**
+ * Keeps a side-aligned device wholly right of `from`, the edge of its caption
+ * column plus clearance, whatever the font. A device bleeding past its panel's
+ * right edge would run into the next panel's caption, so only the last panel's
+ * device may leave through the edge; the others shrink to fit.
+ */
+function besideCaption(layer: DeviceLayer, panel: number, panels: number, output: Size, from: number): DeviceLayer {
+  const rotation = layer.rotation ?? 0;
+  let width = layer.width, height = layer.height ?? 0;
+  let bounds = rotatedSize({ width, height }, rotation, output);
+  const last = panel === panels - 1;
+  const limit = panel + 0.98;
+  if (!last && bounds.width > limit - from) {
+    const shrink = (limit - from) / bounds.width;
+    width *= shrink;
+    height *= shrink;
+    bounds = rotatedSize({ width, height }, rotation, output);
+  }
+  let x = Math.max(layer.x, from + bounds.width / 2);
+  if (!last) x = Math.min(x, limit - bounds.width / 2);
+  return { ...layer, width, height, x };
+}
+
 /** Returns fresh, editable layers. No preset is baked into a bitmap. */
 export function createPreset(preset: LayoutPreset, context: PresetContext): CompositionLayer[] {
   if (preset === 'blank') return [];
@@ -95,13 +121,13 @@ export function createPreset(preset: LayoutPreset, context: PresetContext): Comp
           { ...kicker, x: i + margin, y: kickerY, width: 0.29, align: 'left' },
           { ...title, x: i + margin, y: headlineY, width: 0.29, height: metrics ? titleHeight : caption.titleSize * 6 / output.height,
             maxLines: 5, align: 'left' },
-          { ...device, x: i + 0.69, y: 0.57, ...fittedSize(0.56, 0.74, source, output), rotation: -4 },
+          besideCaption({ ...device, x: i + 0.69, y: 0.57, ...fittedSize(0.56, 0.74, source, output), rotation: -4 }, i, screens.length, output, i + margin + 0.29 + CAPTION_CLEARANCE),
         );
       } else if (factor === 'tablet') {
         layers.push(
           { ...kicker, align: 'left' },
           { ...title, align: 'left' },
-          { ...device, x: i + 0.72, y: 0.64, ...fittedSize(0.88, 0.64, source, output), rotation: -5 },
+          besideCaption({ ...device, x: i + 0.72, y: 0.64, ...fittedSize(0.88, 0.64, source, output), rotation: -5 }, i, screens.length, output, i + 0.02),
         );
       } else {
         const kickerY = 0.18;
@@ -110,7 +136,7 @@ export function createPreset(preset: LayoutPreset, context: PresetContext): Comp
           { ...kicker, x: i + margin, y: kickerY, width: 0.35, align: 'left' },
           { ...title, x: i + margin, y: headlineY, width: 0.35, height: metrics ? titleHeight : caption.titleSize * 6 / output.height,
             maxLines: 5, align: 'left' },
-          { ...device, x: i + 0.83, y: 0.65, ...fittedSize(0.65, 0.70, source, output), rotation: -5 },
+          besideCaption({ ...device, x: i + 0.83, y: 0.65, ...fittedSize(0.65, 0.70, source, output), rotation: -5 }, i, screens.length, output, i + margin + 0.35 + CAPTION_CLEARANCE),
         );
       }
     } else if (preset === 'feature-closeup') {

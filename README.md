@@ -141,7 +141,7 @@ composition: {
 | --- | --- |
 | Position and size | `x`, `y`, `width`, `height`, `anchor`, `scale` |
 | Appearance | `rotation`, `opacity`, `zIndex`, `hidden`, `shadow` |
-| Text | `font`, `fontFile`, `fontSize`, `minFontSize`, `weight`, `letterSpacing`, `lineSpacing`, `lineHeight`, `maxLines`, `align`, `verticalAlign`, `uppercase` |
+| Text | `font`, `fontFile`, `fontSize`, `minFontSize`, `weight`, `letterSpacing`, `lineSpacing`, `lineHeight`, `maxLines`, `align`, `verticalAlign`, `uppercase`, `allowDeviceOverlap` |
 | Device | `screen`, `frame`, `crop`, `radius`, `sourceTextSize` |
 | Additional layers | `text`, `image`, `shape`, or `device` entries in `composition.layers` |
 | Background | A solid color, linear or radial gradient, a comma-separated stack of them, or a local image with `fit` and `opacity` |

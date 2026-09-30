@@ -98,6 +98,8 @@ export interface TextLayer extends LayerPlacement {
   readonly align?: 'left' | 'center' | 'right';
   readonly verticalAlign?: 'top' | 'center' | 'bottom';
   readonly uppercase?: boolean;
+  /** Lets this text sit on a device, such as a label on its screen. Text otherwise keeps `textClearance` from every device. */
+  readonly allowDeviceOverlap?: boolean;
 }
 
 export interface ShapeLayer extends LayerPlacement {
@@ -137,6 +139,11 @@ export interface CompositionSpec {
    * true uses 390px / 14px on phones and tablets, and 800px / 9px UI / 20px captions on desktop.
    */
   readonly readability?: boolean | ReadabilityPolicy;
+  /**
+   * Smallest gap between any text's glyphs and the solid body of a device layer,
+   * as a fraction of panel width. Defaults to 0.02; a render that crowds text fails.
+   */
+  readonly textClearance?: number;
 }
 
 export interface ReadabilityPolicy {
